@@ -1,0 +1,3 @@
+# This file ensures the src_main directory structure is preserved
+# The src_main folder itself is git-ignored, so this file won't be committed
+# All your personal .v files in this directory will remain private
