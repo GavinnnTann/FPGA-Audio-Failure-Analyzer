@@ -133,9 +133,80 @@ From workspace root:
 
 ## Known Legacy Mismatch To Avoid
 - Some older notes describe a 5-byte packet and different UART pin labels.
-- For active builds, trust this reference and `src_main/README.md`: protocol is 8 bytes and `uart_tx` is N3.
+- For active builds, trust this reference and `README.md`: protocol is 8 bytes and `uart_tx` is N3.
 
 ## Notes for Maintenance
 - Keep SOURCE_FILES in scripts/config.tcl aligned with src_main/.
 - Keep constraints/recorder.xdc synchronized with physical wiring.
 - If UART framing changes, update both recorder_top.v and Display_codes/src/main.cpp together.
+
+## Consolidated Content From Previous README
+This section preserves the practical content that was previously in README.md, so project context can stay in README while hands-on implementation details stay in this reference.
+
+### What Is Implemented Now (Operational Snapshot)
+- Captures INMP441 microphone samples through I2S.
+- Decimates audio stream by 6 for lightweight processing.
+- Computes windowed mean-absolute amplitude.
+- Sends framed UART telemetry to ESP32 display.
+
+Current top module and source set:
+- Top module: recorder_top
+- Verilog files:
+  - src_main/recorder_top.v
+  - src_main/i2s_receiver.v
+  - src_main/uart_tx.v
+
+### UART Protocol Notes (Implemented)
+- Baud: 1,000,000
+- Format: 8N1
+- Frame format: AA, 55, result, rms, flags, seq, metric, checksum
+- Checksum: AA XOR 55 XOR result XOR rms XOR flags XOR seq XOR metric
+
+Additional protocol notes:
+- flags[0] = 1 indicates FPGA active.
+- metric is currently a placeholder byte from FPGA (set to 0 until CNN confidence is wired).
+- Frame cadence depends on WINDOW_SAMPLES in src_main/recorder_top.v.
+
+### Day 1 Quick Checklist
+1. Install tools.
+- Vivado ML Edition (with Artix-7 support).
+- USB-JTAG drivers for Digilent/Xilinx cable.
+
+2. Wire hardware.
+- INMP441 to PMOD JA exactly per pin map in this document.
+- FPGA uart_tx (N3 / edge Pin 18) to ESP32 RX.
+- Common ground between CMOD A7 and ESP32.
+
+3. Build bitstream.
+- powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -Action build
+
+4. Program board (volatile test).
+- powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -Action program
+
+5. Validate UART quickly.
+- Confirm ESP32 parser is configured for 1,000,000 baud and 8-byte frame.
+- Expected sync sequence: AA 55.
+
+6. Flash for power-cycle persistence (optional).
+- powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -Action flash
+
+### Quick Troubleshooting
+- No UART data on ESP32:
+  - Verify physical wire is on N3 edge Pin 18.
+  - Verify shared ground between boards.
+  - Verify ESP32 UART baud is 1,000,000.
+
+- Sync bytes not detected:
+  - Confirm parser expects 8-byte frames, not legacy 5/6/7-byte frames.
+  - Check checksum logic includes flags, seq, and metric bytes.
+
+- Works until power cycle:
+  - Use -Action flash (non-volatile), not only -Action program.
+
+### Roadmap (Not Yet Implemented in Current Build)
+The following items are design goals and not part of the current active recorder_top pipeline:
+- FFT feature extraction
+- Spectrogram BRAM buffering
+- CNN inference in FPGA fabric
+
+If you implement any roadmap item, update both README.md and CMOD_A7_PROJECT_REFERENCE.md in the same change.
