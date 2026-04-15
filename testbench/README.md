@@ -1,102 +1,72 @@
 # Testbench and Simulation Guide
 
 ## Overview
-This directory contains testbenches for simulating and verifying Verilog modules before FPGA deployment.
+This directory contains testbenches for simulating and verifying the FPGA acoustic monitoring pipeline before deployment.
 
 ## Available Testbenches
 
-### reaction_game_tb.v
-Comprehensive testbench for the reaction game module that tests:
-- **Button debouncing** - Key press detection with 20ms debounce
-- **State machine** - All 5 states (IDLE → COUNTDOWN → WAIT_RANDOM → GAME_ACTIVE → SHOW_RESULT)
-- **Countdown timer** - 3-2-1-0 countdown display
-- **LED randomization** - 1-4 random LEDs in scattered patterns
-- **Timer accuracy** - Centisecond counting (10ms resolution)
-- **Switch matching** - Game completion logic
-- **Reset behavior** - Return to IDLE when switches cleared
+### fft_test_simple.v
+Simplified pipeline validation testbench that generates a 440 Hz test signal and monitors sample/frame counting:
+- Generates a phase-accumulator approximation of sine at 440 Hz
+- Decimates by 6 (matching the recorder_top decimation chain)
+- Counts samples and frames (512 samples per frame)
+- Outputs VCD waveform for inspection
+
+### fft_test.v
+Extended FFT testbench (for use with Vivado simulation and FFT IP).
+
+### fft_backpressure_tb.v
+Backpressure and no-drop regression testbench for `fft_window_buffer`:
+- **Phase 1**: Fills ring buffer with 512 samples (no stalls), verifies first stream completes
+- **Phase 2**: Feeds HOP_N × 3 samples with random `fft_ready` deassertion (every 7th sample, 3-cycle stalls)
+- **Phase 3**: Extended run of 2048 samples with periodic backpressure stalls every 32 samples
+- **Validates**: Frame continuity (each frame = FFT_N samples), reports errors
+- **Output**: VCD waveform `fft_backpressure_tb.vcd`, console PASS/FAIL
+- **Key signals**: `fft_ready`, `fft_valid`, `fft_last`, `streaming`, `frame_count`, `errors`
 
 ## Running Simulations
 
 ### Option 1: PowerShell Script (Automated)
 ```powershell
-# Run simulation (opens Vivado GUI with waveforms)
+# Run simplified simulation (no Vivado IP dependency)
+.\scripts\run_sim.ps1 -SimTime 100
+```
+
+### Option 2: Vivado Behavioral Simulation
+```powershell
 .\scripts\build.ps1 -Action simulate
 ```
-
-### Option 2: Manual Vivado Command
-```bash
-vivado -mode batch -source scripts/simulate.tcl
-```
-
-### Option 3: Vivado GUI (Interactive)
-1. Open Vivado GUI
-2. **Tools → Run Simulation → Run Behavioral Simulation**
-3. Add `testbench/reaction_game_tb.v` as simulation source
-4. Add `src/reaction_game.v` as design source
-5. Run simulation and view waveforms
 
 ## Simulation Output
 
 ### Console Output
-The testbench prints detailed test results:
+The testbench prints sample and frame progress:
 ```
-=== Reaction Game Testbench ===
---- Test 1: IDLE State ---
-Time=1000: PASS - LEDs are off in IDLE
---- Test 2: Button Press ---
-Time=501000: Button released, should enter COUNTDOWN state
-...
+[time] Frame N: M samples processed
+========== SIMULATION COMPLETE ==========
+Samples generated: ...
+Spectrogram frames: ...
 ```
 
 ### Waveform Files
-- **Location**: `build/sim/reaction_game_sim.sim/`
-- **Format**: `.wdb` (Vivado waveform database)
-- **Signals**: State machine, LEDs, switches, timers, display outputs
+- **Location**: `fft_sim/fft_test_simple.vcd`
+- **Format**: VCD (open in Surfer, GTKWave, or similar)
 
 ## Key Signals to Monitor
 
 | Signal | Description |
 |--------|-------------|
-| `uut.state` | State machine: 0=IDLE, 1=COUNTDOWN, 2=WAIT_RANDOM, 3=GAME_ACTIVE, 4=SHOW_RESULT |
-| `led[9:0]` | LED pattern output (target to match) |
-| `sw[9:0]` | Switch inputs from testbench |
-| `uut.countdown_value` | Current countdown digit (3→2→1→0) |
-| `uut.elapsed_cs` | Elapsed time in centiseconds |
-| `uut.target_pattern` | Random LED pattern to match |
-| `seg[7:0]` | 7-segment display segments |
-| `hex[5:0]` | Digit select signals |
+| `phase_accum` | 440 Hz tone phase accumulator |
+| `sample_ena` | Decimated sample strobe (~7.8 kHz) |
+| `sample_count` | Running sample counter |
+| `frame_count` | Spectrogram frame counter (increments every 512 samples) |
+| `sine_sample` | Generated test audio sample |
 
-## Timescale Notes
-- **Clock**: 12 MHz (83.33ns period)
-- **Debounce time**: 20ms (240,000 clock cycles)
-- **Countdown**: 1 second per digit
-- **Random delay**: 0.5-2 seconds
-- **Simulation time**: ~10 seconds total (truncated for speed)
-
-## Modifying Testbenches
-
-### Speed Up Simulation
-Reduce delay parameters in testbench:
-```verilog
-#50000000;  // Wait 50ms instead of 3 seconds
-```
-
-### Add More Tests
-Extend the testbench with additional scenarios:
-```verilog
-// Test 10: Error case - wrong switch combination
-sw = 10'b1111111111;  // Wrong pattern
-#100000;
-if (uut.state == 3'd3)  // Still in GAME_ACTIVE
-    $display("PASS - Game continues with wrong switches");
-```
-
-### Custom Signal Monitoring
-Add to simulate.tcl:
-```tcl
-add_wave {{/reaction_game_tb/uut/lfsr}}  # Monitor LFSR random generator
-add_wave {{/reaction_game_tb/uut/cs_counter}}  # Monitor centisecond counter
-```
+## Verification Checklist
+- [ ] `sample_ena` pulses regularly (~every 128 ns at 12 MHz / 6)
+- [ ] `sample_count` increments at each pulse
+- [ ] `frame_count` increments after 512 samples
+- [ ] No timing violations in synthesis report
 
 ## Troubleshooting
 

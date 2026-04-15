@@ -30,6 +30,7 @@ extern "C" {
 
 #include "screens/ui_Screen1.h"
 #include "screens/ui_Screen2.h"
+#include "screens/ui_Screen3.h"
 
 ///////////////////// VARIABLES ////////////////////
 
@@ -44,12 +45,15 @@ extern lv_obj_t * ui_Image4;
 extern lv_obj_t * ui_Button1;
 extern lv_obj_t * ui_Arc1;
 extern lv_obj_t * ui_Bar1;
-extern lv_obj_t * ui_Label1;
-extern lv_obj_t * ui_Label2;
-extern lv_obj_t * ui_Label3;
+extern lv_obj_t * ui_StatusLabel;
+extern lv_obj_t * ui_UptimeLabel;
+extern lv_obj_t * ui_FpgaStateLabel;
 void ui_append_uart0_monitor_line(const char * text);
 void ui_append_uart2_monitor_line(const char * text);
 void ui_set_uart2_monitor_text(const char * text);
+
+// SCREEN: ui_Screen3
+extern lv_obj_t * ui_Screen3;
 
 // IMAGE ASSETS
 LV_IMG_DECLARE(ui_img_new_nexswap_logo_big_png);    // assets/new nexswap logo big.png
