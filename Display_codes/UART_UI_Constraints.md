@@ -21,8 +21,8 @@ Notes:
 
 ### 1) Arc: ui_Arc1
 - Object type: LVGL Arc
-- Size: 280 x 280
-- Position: center-aligned, offset x = -80, y = 0
+- Size: 250 x 250
+- Position: center-aligned, offset x = -112, y = 0 (left zone)
 - Initial value: 50
 - Explicit range in code: not set
 - Effective LVGL default range: 0 to 100
@@ -44,8 +44,8 @@ Integration note:
 - Object type: LVGL Bar
 - Range: 0 to 255 (explicitly configured)
 - Initial value: 10
-- Size: 20 x 200
-- Position: center-aligned, offset x = 150, y = 0
+- Size: 18 x 214
+- Position: inside right telemetry panel
 - Touch interaction: disabled (`LV_OBJ_FLAG_CLICKABLE` and `LV_OBJ_FLAG_CLICK_FOCUSABLE` removed)
 
 Design intent:
@@ -57,15 +57,15 @@ Integration note:
 ### 3) Labels
 - Label1: ui_Label1
   - Initial text: "Normal"
-  - Position: x = -80, y = -20
+  - Position: inside right telemetry panel (status line)
   - Intended runtime meaning: CNN binary output (normal/abnormal)
 - Label2: ui_Label2
   - Initial text: "uptime"
-  - Position: x = -80, y = 10
+  - Position: inside right telemetry panel
   - Intended runtime meaning: local ESP32 recording uptime
 - Label3: ui_Label3
   - Initial text: "Active"
-  - Position: x = -80, y = 100
+  - Position: inside right telemetry panel
   - Intended runtime meaning: FPGA activity state (awake/sleep)
 
 Runtime overlay labels (created in firmware at runtime):
@@ -83,6 +83,8 @@ Runtime overlay labels (created in firmware at runtime):
 
 ### FPGA -> ESP32
 Current transmitted fields (implemented):
+
+**Frame 1: RMS Telemetry (8 bytes, sync AA 55)**
 - result: 8 bits
   - 0 = Normal
   - non-zero = Abnormal
@@ -91,12 +93,28 @@ Current transmitted fields (implemented):
 - flags: 8 bits
   - bit0 = fpga_active (0 = Sleep/Idle, 1 = Active/Awake)
   - bit1..bit7 currently reserved
+- seq: 8 bits
+  - rolling frame sequence counter (modulo 256)
+- metric: 8 bits
+  - reserved auxiliary/confidence byte (currently not used for severity)
+
+**Frame 2: Spectrogram Slice (6 bytes each, sync DD 77) — Burst Mode**
+- bin_index: 8 bits (0–63)
+- bin_magnitude_low: 8 bits (LSB of 16-bit magnitude)
+- bin_magnitude_high: 8 bits (MSB of 16-bit magnitude)
+- checksum: DD XOR 77 XOR bin_index XOR bin_low XOR bin_high
+- Cadence: All 64 bins burst-transmitted after each RMS frame (~3.84 ms burst, ~18 Hz refresh)
+- Frequency range: 0–23.4 kHz, ~366 Hz/bin (46875/512 × 4)
+- ESP32 parser must detect both sync patterns (AA for RMS, DD for spectrogram)
 
 ### Local ESP32
 - Uptime timer and formatting for Label2
 - Continuous arc progression over time (one full revolution every 6 minutes)
-- Arc abnormality visual/color logic from `result`
+- Arc dot plotting and persistence/fade logic for anomaly events
 - Vibration pulse on abnormal edge (120 ms on rising transition)
+- Amplitude-derived severity index (0..100) and severity band
+- 10-second RMS min/max window computation
+- 60-second rolling anomaly count
 
 ## UART Transmission Schema (Implemented)
 
@@ -130,7 +148,7 @@ Parser behavior on ESP32:
   - Example drop across wrap: `255 -> 2` implies dropped `0` and `1` (drop count +2)
   - Forward jumps increment `seq_drop` (dropped frame estimate)
   - Backward/old arrivals increment `seq_reorder`
-  - Arc indicator color updates based on `result`
+  - Arc stays neutral; anomaly events place dot markers on the ring
   - Telemetry timestamp is refreshed
 - On invalid checksum:
   - Frame is discarded
@@ -155,12 +173,11 @@ Severity behavior (implemented):
 - Label3 reflects FPGA awake/sleep state.
 - Label2 increments locally on ESP32 (not sent from FPGA).
 - Arc motion is continuous from local time.
-- Arc color changes when `result` indicates abnormal.
 - Arc stays neutral and anomaly moments are marked with red dots on uptime ring positions.
 - Arc and Bar are display-only in UI (not user-adjustable via touch).
 
 Implemented runtime details:
-- UART2 is configured RX-only on GPIO16 (TX disabled).
+- UART2 is configured on GPIO32 (RX) and GPIO33 (TX).
 - UART2 baud is 1000000 with SERIAL_8N1.
 - RX buffer size is configured to 1024 bytes.
 - Main loop parses UART before UI handling.
@@ -185,8 +202,5 @@ Implemented runtime details:
 
 ## Suggested Next Step
 Optional protocol hardening and observability improvements:
-- Add no-frame timeout handling to drive Label3/Bar/Arc fallback state.
-- Add counters for checksum failures and parser resync events.
-- Add sequence counter to detect dropped frames.
 - Add payload length/version for forward compatibility.
 - Replace XOR checksum with CRC-8/CRC-16 for stronger error detection.

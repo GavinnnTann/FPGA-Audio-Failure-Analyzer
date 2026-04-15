@@ -36,6 +36,26 @@ file mkdir $project_dir
 # Create project
 create_project -force $project_name $project_dir -part $part_name
 
+# Add FFT IP repository path
+set ip_repo_path [file normalize "$script_dir/../ip"]
+if {[file exists $ip_repo_path]} {
+    puts "INFO: Adding IP repository: $ip_repo_path"
+    set_property ip_repo_paths $ip_repo_path [current_project]
+    update_ip_catalog
+} else {
+    puts "WARNING: IP repository not found at $ip_repo_path"
+}
+
+# Add FFT IP .xci file if it exists
+set fft_xci_file [file normalize "$ip_repo_path/xfft_1/xfft_1.xci"]
+if {[file exists $fft_xci_file]} {
+    puts "INFO: Adding FFT IP core: $fft_xci_file"
+    add_files [list $fft_xci_file]
+    puts "Added FFT IP core (xfft_1)"
+} else {
+    puts "WARNING: FFT IP .xci file not found at $fft_xci_file"
+}
+
 # Add Verilog source files from configuration
 if {[llength $SOURCE_FILES] == 1 && [string match "*\**" $SOURCE_FILES]} {
     # Glob pattern - add all matching files
@@ -82,12 +102,23 @@ set_property top $TOP_MODULE [current_fileset]
 # Set Verilog include directories (for `include directives)
 set_property include_dirs [list $src_dir] [current_fileset]
 
-# Add ROM data files (.hex) if present in src_main
+# Add ROM data files (.hex and .mem) if present in src_main
 set hex_files [glob -nocomplain $src_dir/*.hex]
 if {[llength $hex_files] > 0} {
     add_files $hex_files
     puts "Added [llength $hex_files] hex data file(s)"
 }
+
+set mem_files [glob -nocomplain $src_dir/*.mem]
+if {[llength $mem_files] > 0} {
+    add_files $mem_files
+    puts "Added [llength $mem_files] mem data file(s)"
+}
+
+# Generate IP cores (xfft_1 and any others)
+puts "INFO: Generating IP cores..."
+generate_target all [get_ips]
+puts "INFO: IP cores generated"
 
 # Update compile order
 update_compile_order -fileset sources_1

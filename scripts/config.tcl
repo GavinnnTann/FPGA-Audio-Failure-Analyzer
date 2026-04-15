@@ -30,7 +30,7 @@ set PART_NAME "xc7a35tcpg236-1"
 # Option 3: All .v files in src_main/ (uncomment to use all Verilog files)
 # set SOURCE_FILES "*.v"
 # Keep this list explicit to avoid accidentally building legacy src/top_module.v.
-set SOURCE_FILES [list "recorder_top.v" "i2s_receiver.v" "uart_tx.v"]
+set SOURCE_FILES [list "recorder_top.v" "i2s_receiver.v" "uart_tx.v" "fft_window_buffer.v" "fft_magnitude.v" "fft_feature_quantizer.v" "fft_frontend.v" "spectrogram_buffer_64x64.v"]
 
 # Constraint files configuration
 # Option 1: Use all XDC files in constraints/ directory (default)

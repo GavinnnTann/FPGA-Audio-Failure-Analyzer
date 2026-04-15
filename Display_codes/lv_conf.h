@@ -4,8 +4,8 @@
 /* Match SquareLine project requirements */
 #define LV_COLOR_DEPTH 16
 
-/* Target ~60 FPS redraw cadence for smoother UI animation */
-#define LV_DEF_REFR_PERIOD 16
+/* Target ~30 FPS redraw cadence — ESP32+SPI can't sustain 60 FPS anyway */
+#define LV_DEF_REFR_PERIOD 33
 
 /* Fonts used by generated UI */
 #define LV_FONT_MONTSERRAT_10 1
