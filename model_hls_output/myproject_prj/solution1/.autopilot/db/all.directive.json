@@ -1,0 +1,23 @@
+[
+  {
+    "functionLabel": "",
+    "functionName": "myproject",
+    "id": 0,
+    "ifcond": "",
+    "insert_position": "",
+    "label": "",
+    "pragma": {
+      "name": "TOP",
+      "option": [
+        {
+          "name": "name",
+          "value": "myproject"
+        }
+      ]
+    },
+    "slx": false,
+    "sourceFile": "/mnt/c/Users/aleon/Documents/School/Tron/3B-SUTD/1_Digital_Systems_Lab/FPGA-Audio-Failure-Analyzer/model_hls_output/build_prj.tcl",
+    "sourceLine": 183,
+    "success": true
+  }
+]

@@ -1,0 +1,36 @@
+---
+MainSourceFile:  /mnt/c/Users/aleon/Documents/School/Tron/3B-SUTD/1_Digital_Systems_Lab/FPGA-Audio-Failure-Analyzer/model_hls_output/myproject_prj/solution1/.autopilot/db/myproject.pp.0.cpp
+Diagnostics:     
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '43:74'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '43:78'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '59:74'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '59:78'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '75:77'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '75:82'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '91:77'
+    FilePath:        firmware/myproject.cpp
+  - DiagnosticName:  clang-diagnostic-warning
+    Message:         '[xlx-df-check-10] Either use an argument of the function or declare the variable inside the dataflow loop body'
+    FileOffset:      '91:82'
+    FilePath:        firmware/myproject.cpp
+...

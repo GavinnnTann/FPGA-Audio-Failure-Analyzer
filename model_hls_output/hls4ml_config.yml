@@ -1,0 +1,148 @@
+Backend: Vitis
+ClockPeriod: 10
+HLSConfig:
+  LayerName:
+    dec_act1:
+      Precision:
+        result: ufixed<4,1,RND_CONV,SAT>
+        table: fixed<18,8>
+      ReuseFactor: 1
+      TableSize: 1024
+      Trace: false
+    dec_conv1:
+      ConvImplementation: LineBuffer
+      LimitResources: true
+      ParallelizationFactor: 1
+      Precision:
+        accum: fixed<16,6>
+        bias: fixed<4,1>
+        result: fixed<8,4>
+        weight: fixed<4,1>
+      ReuseFactor: 128
+      Trace: false
+    dec_conv1_linear:
+      LimitResources: true
+      Precision:
+        accum: fixed<16,6>
+        result: fixed<8,4>
+        table: fixed<18,8>
+      ReuseFactor: 128
+      TableSize: 1024
+      Trace: false
+    dec_out_act:
+      Precision:
+        result: ufixed<8,0,RND_CONV,SAT>
+        table: fixed<18,8>
+      ReuseFactor: 1
+      TableSize: 1024
+      Trace: false
+    dec_out_conv:
+      ConvImplementation: LineBuffer
+      LimitResources: true
+      ParallelizationFactor: 1
+      Precision:
+        accum: fixed<16,6>
+        bias: fixed<4,1>
+        result: fixed<16,6>
+        weight: fixed<4,1>
+      ReuseFactor: 128
+      Trace: false
+    dec_out_conv_linear:
+      LimitResources: true
+      Precision:
+        accum: fixed<16,6>
+        result: fixed<16,6>
+        table: fixed<18,8>
+      ReuseFactor: 128
+      TableSize: 1024
+      Trace: false
+    dec_up1:
+      Precision:
+        result: fixed<16,6>
+      Trace: false
+    enc_act1:
+      Precision:
+        result: ufixed<8,2>
+        table: fixed<18,8>
+      ReuseFactor: 1
+      TableSize: 1024
+      Trace: false
+    enc_act2:
+      Precision:
+        result: ufixed<6,1>
+        table: fixed<18,8>
+      ReuseFactor: 1
+      TableSize: 1024
+      Trace: false
+    enc_conv1:
+      ConvImplementation: LineBuffer
+      LimitResources: true
+      ParallelizationFactor: 1
+      Precision:
+        accum: fixed<16,6>
+        bias: fixed<8,2>
+        result: fixed<16,6>
+        weight: fixed<8,2>
+      ReuseFactor: 128
+      Trace: false
+    enc_conv1_linear:
+      LimitResources: true
+      Precision:
+        accum: fixed<16,6>
+        result: fixed<16,6>
+        table: fixed<18,8>
+      ReuseFactor: 128
+      TableSize: 1024
+      Trace: false
+    enc_conv2:
+      ConvImplementation: LineBuffer
+      LimitResources: true
+      ParallelizationFactor: 1
+      Precision:
+        accum: fixed<16,6>
+        bias: fixed<8,2>
+        result: fixed<16,6>
+        weight: fixed<4,1>
+      ReuseFactor: 128
+      Trace: false
+    enc_conv2_linear:
+      LimitResources: true
+      Precision:
+        accum: fixed<16,6>
+        result: fixed<16,6>
+        table: fixed<18,8>
+      ReuseFactor: 128
+      TableSize: 1024
+      Trace: false
+    enc_pool1:
+      ConvImplementation: LineBuffer
+      Precision:
+        accum: fixed<16,6>
+        result: fixed<16,6>
+      ReuseFactor: 1
+      Trace: false
+    enc_pool2:
+      ConvImplementation: LineBuffer
+      Precision:
+        accum: fixed<16,6>
+        result: fixed<16,6>
+      ReuseFactor: 1
+      Trace: false
+    input_4:
+      Precision:
+        result: ufixed<8,0>
+      Trace: false
+  Model:
+    BramFactor: 256
+    Precision: fixed<16,6>
+    ReuseFactor: 64
+    Strategy: Resource
+    TraceOutput: false
+IOType: io_stream
+InputData: null
+KerasModel: !keras_model '../../FPGA-Audio-Failure-Analyzer/model_hls_output/keras_model.h5'
+OutputDir: ../../FPGA-Audio-Failure-Analyzer/model_hls_output
+OutputPredictions: null
+Part: xc7a35tcpg236-1
+ProjectName: myproject
+Stamp: 0FD1AfAF

@@ -1,0 +1,49 @@
+<profile>
+
+<section name = "Vitis HLS Report for 'conv_2d_cl_array_ap_ufixed_4u_array_ap_fixed_16_6_5_3_0_1u_config14_s'" level="0">
+<item name = "Date">Thu Apr 16 20:36:26 2026
+</item>
+<item name = "Version">2024.2 (Build 5238294 on Nov  8 2024)</item>
+<item name = "Project">myproject_prj</item>
+<item name = "Solution">solution1 (Vivado IP Flow Target)</item>
+<item name = "Product family">artix7</item>
+<item name = "Target device">xc7a35t-cpg236-1</item>
+</section>
+
+<section name = "Performance Estimates" level="0">
+<item name = "Timing">
+<section name = "" level="1">
+<item name = "Summary"><table name="" hasTotal="0">
+<keys size="4">Clock, Target, Estimated, Uncertainty</keys>
+<column name="ap_clk">10.00 ns, 7.014 ns, 1.25 ns</column>
+</table>
+</item>
+</section>
+</item>
+<item name = "Latency">
+<section name = "" level="1">
+<item name = "Summary"><table name="" hasTotal="0">
+<keys size="8">, min, max, min, max, min, max, Type</keys>
+<column name="">13134, 174306, 0.131 ms, 1.743 ms, 13134, 174306, no</column>
+</table>
+</item>
+<item name = "Detail">
+<section name = "" level="1">
+<item name = "Instance"><table name="" hasTotal="0">
+<keys size="9">Instance, Module, min, max, min, max, min, max, Type</keys>
+<column name="call_ln286_shift_line_buffer_array_ap_ufixed_4_1_4_0_0_4u_config14_s_fu_332">shift_line_buffer_array_ap_ufixed_4_1_4_0_0_4u_config14_s, 0, 0, 0 ns, 0 ns, 1, 1, yes</column>
+</table>
+</item>
+<item name = "Loop"><table name="" hasTotal="0">
+<keys size="8">Loop Name, min, max, Latency, achieved, target, Count, Pipelined</keys>
+<column name="- ReadInputHeight">13133, 174305, 199 ~ 2641, -, -, 66, no</column>
+<column name=" + ReadInputWidth">197, 2639, 3 ~ 40, -, -, 66, no</column>
+<column name="  ++ ReuseLoop">36, 36, 2, 1, 1, 36, yes</column>
+</table>
+</item>
+</section>
+</item>
+</section>
+</item>
+</section>
+</profile>
