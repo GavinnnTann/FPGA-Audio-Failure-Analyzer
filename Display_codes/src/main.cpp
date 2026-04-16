@@ -18,7 +18,7 @@ constexpr uint32_t kUiUpdateIntervalMs = 200;
 constexpr uint32_t kVibePulseMs = 120;
 constexpr uint32_t kNoDataTimeoutMs = 400;
 constexpr uint32_t kStatsUpdateIntervalMs = 2000;
-constexpr uint16_t kMaxUartBytesPerLoop = 1024;
+constexpr uint16_t kMaxUartBytesPerLoop = 2048;
 
 constexpr uint32_t kFpgaUartBaud = 1000000;
 constexpr int kFpgaUartRxPin = 32;
@@ -134,7 +134,7 @@ void init_fpga_uart() {
   fpga_uart.end();
   pinMode(kFpgaUartRxPin, INPUT);
   pinMode(kFpgaUartTxPin, OUTPUT);
-  fpga_uart.setRxBufferSize(2048);
+  fpga_uart.setRxBufferSize(8192);
   fpga_uart.begin(kFpgaUartBaud, SERIAL_8N1, kFpgaUartRxPin, kFpgaUartTxPin);
 }
 
@@ -348,8 +348,18 @@ void loop() {
 
   // Determine screen BEFORE parsing so UART callbacks can skip
   // Screen2-only LVGL work while the spectrogram is displayed.
+  static bool prev_on_screen3 = false;
   const bool on_screen3 = (lv_screen_active() == ui_Screen3);
   screen3_active = on_screen3;
+
+  // On Screen3 → Screen2 transition the first full-screen render can
+  // block long enough for the UART buffer to overflow, losing RMS
+  // frames. Stamp last_packet_ms to now so the stale timer does not
+  // fire during the transition.
+  if (prev_on_screen3 && !on_screen3 && telemetry.has_packet) {
+    telemetry.last_packet_ms = now;
+  }
+  prev_on_screen3 = on_screen3;
 
   parse_uart2_stream(now, kMaxUartBytesPerLoop);
 

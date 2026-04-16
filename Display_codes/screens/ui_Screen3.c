@@ -128,6 +128,12 @@ static uint16_t compute_peak(const uint16_t *bins, uint8_t count)
 void ui_screen3_update_spectrogram(const uint16_t *bins, uint8_t count)
 {
     if (bins == NULL) return;
+
+    /* Skip the expensive memmove + pixel work when Screen3 is not visible.
+     * All screens are created at init so ui_Canvas is always non-NULL;
+     * we must check the active screen instead.                             */
+    if (lv_screen_active() != ui_Screen3) return;
+
     const uint8_t n = (count > kSpectrogramBins)
                           ? (uint8_t)kSpectrogramBins : count;
 
@@ -228,6 +234,10 @@ void ui_Screen3_screen_init(void)
     ui_Canvas = lv_canvas_create(ui_Screen3);
     lv_canvas_set_buffer(ui_Canvas, canvas_buf,
                          kCanvasW, kCanvasH, LV_COLOR_FORMAT_RGB565);
+
+    /* Let clicks pass through to ui_Screen3 so "tap to return" works
+     * even when tapping on the canvas area.                               */
+    lv_obj_remove_flag(ui_Canvas, LV_OBJ_FLAG_CLICKABLE);
 
     /* Position at centre, push down a little for the title bar.           */
     lv_obj_set_align(ui_Canvas, LV_ALIGN_CENTER);
