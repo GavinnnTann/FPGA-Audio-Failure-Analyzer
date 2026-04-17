@@ -82,6 +82,22 @@ if {[llength $SOURCE_FILES] == 1 && [string match "*\**" $SOURCE_FILES]} {
     add_files $source_file_list
 }
 
+# Add CNN IP (hls4ml) Verilog files if CNN_IP_DIR is set
+if {[info exists CNN_IP_DIR] && $CNN_IP_DIR ne ""} {
+    set cnn_dir [file normalize "$script_dir/../$CNN_IP_DIR"]
+    if {[file exists $cnn_dir]} {
+        set cnn_files [glob -nocomplain $cnn_dir/*.v]
+        if {[llength $cnn_files] > 0} {
+            add_files $cnn_files
+            puts "INFO: Added [llength $cnn_files] CNN IP Verilog file(s) from $cnn_dir"
+        } else {
+            puts "WARNING: No .v files found in CNN IP directory: $cnn_dir"
+        }
+    } else {
+        puts "WARNING: CNN IP directory not found: $cnn_dir"
+    }
+}
+
 # Add constraint files from configuration
 if {[llength $CONSTRAINT_FILES] == 1 && [string match "*\**" $CONSTRAINT_FILES]} {
     # Glob pattern

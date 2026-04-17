@@ -4,12 +4,13 @@
 // 1) I2S receive (24-bit left channel)
 // 2) Decimate by 6 to ~7.812 kHz, convert to signed 16-bit
 // 3) STFT frontend (Hann window + FFT + magnitude + feature quantization)
-// 4) Spectrogram staging buffer (64x64x8)
-// 5) Build UART frames:
+// 4) Spectrogram ping-pong buffer (2 × 64x64x8 BRAM)
+// 5) CNN autoencoder inference (hls4ml myproject @ 100 MHz)
+// 6) Reconstruction error → anomaly score (MAE)
+// 7) Build UART frames:
 //    - RMS telemetry: 0xAA, 0x55, RESULT, RMS_ENERGY, FLAGS, SEQ, METRIC, CHECKSUM
 //    - Spectrogram slice: 0xDD, 0x77, BIN_IDX, BIN_LOW, BIN_HIGH, CHECKSUM
-//
-// RESULT remains placeholder threshold detection; CNN integration comes next.
+//    RESULT = CNN anomaly detection, METRIC = CNN anomaly score (MAE)
 module recorder_top (
     input  wire clk,      // 12 MHz system clock
     input  wire btn0,     // Reserved for future use
@@ -26,18 +27,30 @@ module recorder_top (
     localparam DECIM            = 6;
     localparam WINDOW_SAMPLES   = 391;     // ~50ms @ 7812.5 Hz
     localparam AMP_SHIFT        = 5;       // scale mean_abs to 8-bit
-    localparam ANOMALY_THRESHOLD = 16'd1800; // placeholder threshold
+    localparam CNN_ANOMALY_THRESHOLD = 8'd30; // CNN MAE anomaly threshold (0-255)
 
     // UART: 1,000,000 baud, 8N1 at 12 MHz
     localparam UART_BAUD        = 1_000_000;
 
     // ----------------------------------------------------------------
-    // Power-on reset (8 clock cycles)
+    // Clock generation: 12 MHz → 100 MHz for CNN
+    // ----------------------------------------------------------------
+    wire clk_100m;
+    wire mmcm_locked;
+
+    clk_gen clk_gen_inst (
+        .clk_in   (clk),
+        .clk_100m (clk_100m),
+        .locked   (mmcm_locked)
+    );
+
+    // ----------------------------------------------------------------
+    // Power-on reset (8 clock cycles + wait for MMCM lock)
     // ----------------------------------------------------------------
     reg [3:0] rst_cnt = 4'd0;
-    wire rst_n = rst_cnt[3];
+    wire rst_n = rst_cnt[3] & mmcm_locked;
     always @(posedge clk)
-        if (!rst_n) rst_cnt <= rst_cnt + 4'd1;
+        if (!rst_cnt[3]) rst_cnt <= rst_cnt + 4'd1;
 
     // ----------------------------------------------------------------
     // I2S receiver
@@ -108,18 +121,103 @@ module recorder_top (
 
     wire        spec_frame_complete;
     wire [7:0]  spec_buffer_frame_id;
-    wire [511:0] latest_feature_line;
+    wire        spec_frame_ready;
+    wire        spec_sel;
 
-    spectrogram_buffer_64x64 spectrogram_buffer_inst (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .line_valid   (spec_frame_valid),
-        .line_index   (spec_frame_index),
-        .line_data    (spec_bin_feature8),
+    // CNN read port wires (100 MHz domain)
+    wire [11:0] cnn_bram_rd_addr;
+    wire [7:0]  cnn_bram_rd_data;
+
+    // CDC: cnn_busy from 100 MHz → 12 MHz (level sync)
+    wire        cnn_busy_100m;
+    reg         cnn_busy_sync1, cnn_busy_sync2;
+    always @(posedge clk) begin
+        cnn_busy_sync1 <= cnn_busy_100m;
+        cnn_busy_sync2 <= cnn_busy_sync1;
+    end
+    wire cnn_idle_sync = ~cnn_busy_sync2;
+
+    spectrogram_pingpong spectrogram_buffer_inst (
+        .wr_clk        (clk),
+        .wr_rst_n      (rst_n),
+        .line_valid    (spec_frame_valid),
+        .line_index    (spec_frame_index[5:0]),
+        .line_data     (spec_bin_feature8),
         .frame_complete(spec_frame_complete),
-        .frame_id     (spec_buffer_frame_id),
-        .latest_line  (latest_feature_line)
+        .frame_id      (spec_buffer_frame_id),
+        .rd_clk        (clk_100m),
+        .rd_addr       (cnn_bram_rd_addr),
+        .rd_data       (cnn_bram_rd_data),
+        .cnn_idle_sync (cnn_idle_sync),
+        .frame_ready   (spec_frame_ready),
+        .sel           (spec_sel)
     );
+
+    // ----------------------------------------------------------------
+    // CDC: frame_ready pulse from 12 MHz → 100 MHz (toggle sync)
+    // ----------------------------------------------------------------
+    reg frame_ready_toggle = 1'b0;
+    always @(posedge clk)
+        if (spec_frame_ready) frame_ready_toggle <= ~frame_ready_toggle;
+
+    reg fr_toggle_s1, fr_toggle_s2, fr_toggle_s3;
+    always @(posedge clk_100m) begin
+        fr_toggle_s1 <= frame_ready_toggle;
+        fr_toggle_s2 <= fr_toggle_s1;
+        fr_toggle_s3 <= fr_toggle_s2;
+    end
+    wire frame_ready_100m = fr_toggle_s2 ^ fr_toggle_s3;
+
+    // ----------------------------------------------------------------
+    // CNN wrapper (100 MHz domain)
+    // ----------------------------------------------------------------
+    wire        cnn_done_100m;
+    wire [7:0]  cnn_anomaly_score_100m;
+
+    // Reset synchronizer for 100 MHz domain
+    reg rst_100m_n_s1, rst_100m_n_s2;
+    always @(posedge clk_100m) begin
+        rst_100m_n_s1 <= rst_n;
+        rst_100m_n_s2 <= rst_100m_n_s1;
+    end
+    wire rst_100m_n = rst_100m_n_s2;
+
+    cnn_wrapper cnn_wrapper_inst (
+        .clk          (clk_100m),
+        .rst_n        (rst_100m_n),
+        .bram_rd_addr (cnn_bram_rd_addr),
+        .bram_rd_data (cnn_bram_rd_data),
+        .frame_ready  (frame_ready_100m),
+        .cnn_busy     (cnn_busy_100m),
+        .cnn_done     (cnn_done_100m),
+        .anomaly_score(cnn_anomaly_score_100m)
+    );
+
+    // ----------------------------------------------------------------
+    // CDC: CNN results from 100MHz → 12MHz
+    // ----------------------------------------------------------------
+    // cnn_done pulse: toggle synchronizer
+    reg cnn_done_toggle = 1'b0;
+    always @(posedge clk_100m)
+        if (cnn_done_100m) cnn_done_toggle <= ~cnn_done_toggle;
+
+    reg cd_toggle_s1, cd_toggle_s2, cd_toggle_s3;
+    always @(posedge clk) begin
+        cd_toggle_s1 <= cnn_done_toggle;
+        cd_toggle_s2 <= cd_toggle_s1;
+        cd_toggle_s3 <= cd_toggle_s2;
+    end
+    wire cnn_done_sync = cd_toggle_s2 ^ cd_toggle_s3;
+
+    // anomaly_score bus: latched in 100 MHz, stable when cnn_done arrives
+    reg [7:0] cnn_anomaly_score_sync;
+    reg       cnn_result_sync;
+    always @(posedge clk) begin
+        if (cnn_done_sync) begin
+            cnn_anomaly_score_sync <= cnn_anomaly_score_100m;
+            cnn_result_sync <= (cnn_anomaly_score_100m > CNN_ANOMALY_THRESHOLD);
+        end
+    end
 
     reg [5:0] spec_bin_idx = 6'd0;
     wire [15:0] current_spec_bin;
@@ -133,7 +231,6 @@ module recorder_top (
     reg [15:0] sample_count  = 16'd0;
     reg [31:0] mean_abs      = 32'd0;
     reg [7:0]  rms_energy    = 8'd0;
-    reg        anomaly_result = 1'b0;
     wire [31:0] window_mean_calc = (abs_sum + abs_sample) / WINDOW_SAMPLES;
 
     // ----------------------------------------------------------------
@@ -185,7 +282,6 @@ module recorder_top (
             sample_count   <= 16'd0;
             mean_abs       <= 32'd0;
             rms_energy     <= 8'd0;
-            anomaly_result <= 1'b0;
             live_amp_byte  <= 8'd0;
             led            <= 1'b0;
             tx_state       <= 5'd0;
@@ -215,16 +311,10 @@ module recorder_top (
                     live_amp_byte <= (abs_sample[7:0] << 1);
             end
 
-            // 8-second stats window
+            // 8-second stats window (RMS energy calculation)
             if (sample_ena) begin
                 if (sample_count == WINDOW_SAMPLES - 1) begin
-                    // Include this sample before finalizing window
                     mean_abs <= window_mean_calc;
-
-                    if (window_mean_calc > ANOMALY_THRESHOLD)
-                        anomaly_result <= 1'b1;
-                    else
-                        anomaly_result <= 1'b0;
 
                     // RMS byte scaling (mean absolute, shifted)
                     if ((window_mean_calc >> AMP_SHIFT) > 32'd255)
@@ -235,24 +325,24 @@ module recorder_top (
                     abs_sum      <= 32'd0;
                     sample_count <= 16'd0;
 
-                    // Use the freshly computed window values for this frame.
-                    tx_result <= (window_mean_calc > ANOMALY_THRESHOLD) ? 8'd1 : 8'd0;
+                    // CNN anomaly detection replaces energy-threshold approach
+                    tx_result <= cnn_result_sync ? 8'd1 : 8'd0;
                     if ((window_mean_calc >> AMP_SHIFT) > 32'd255)
                         tx_rms <= 8'hFF;
                     else
                         tx_rms <= window_mean_calc[AMP_SHIFT+7:AMP_SHIFT];
-                    // bit0=1 indicates FPGA active/awake; remaining bits reserved.
-                    tx_flags <= 8'h01;
-                    // Placeholder for future CNN confidence (0..255 for now).
-                    tx_metric <= 8'd0;
+                    // bit0=1 FPGA active; bit1=1 CNN result valid
+                    tx_flags <= {6'b0, cnn_result_sync, 1'b1};
+                    // CNN anomaly score (MAE, 0-255)
+                    tx_metric <= cnn_anomaly_score_sync;
                     tx_chk   <= 8'hAA ^ 8'h55
-                                ^ ((window_mean_calc > ANOMALY_THRESHOLD) ? 8'd1 : 8'd0)
+                                ^ (cnn_result_sync ? 8'd1 : 8'd0)
                                 ^ (((window_mean_calc >> AMP_SHIFT) > 32'd255)
                                     ? 8'hFF
                                     : window_mean_calc[AMP_SHIFT+7:AMP_SHIFT])
-                                ^ 8'h01
+                                ^ {6'b0, cnn_result_sync, 1'b1}
                                 ^ tx_seq
-                                ^ 8'd0;
+                                ^ cnn_anomaly_score_sync;
                     if (tx_state == 5'd0)
                         tx_state <= 5'd1;
                 end else begin

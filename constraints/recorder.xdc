@@ -31,6 +31,10 @@ set_property -dict { PACKAGE_PIN N3    IOSTANDARD LVCMOS33 } [get_ports { uart_t
 ## UART TX mirror to PC via onboard USB-UART bridge (FTDI FT2232HQ Channel B)
 set_property -dict { PACKAGE_PIN J18   IOSTANDARD LVCMOS33 } [get_ports { uart_tx_usb }];
 
+## Clock domain crossing constraints
+## The 100 MHz CNN clock is generated from sys_clk_pin via MMCM — treat as asynchronous
+set_clock_groups -asynchronous -group [get_clocks sys_clk_pin] -group [get_clocks -of_objects [get_pins clk_gen_inst/mmcm_inst/CLKOUT0]]
+
 ## Configuration
 set_property CFGBVS VCCO [current_design]
 set_property CONFIG_VOLTAGE 3.3 [current_design]

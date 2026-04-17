@@ -30,7 +30,10 @@ set PART_NAME "xc7a35tcpg236-1"
 # Option 3: All .v files in src_main/ (uncomment to use all Verilog files)
 # set SOURCE_FILES "*.v"
 # Keep this list explicit to avoid accidentally building legacy src/top_module.v.
-set SOURCE_FILES [list "recorder_top.v" "i2s_receiver.v" "uart_tx.v" "fft_window_buffer.v" "fft_magnitude.v" "fft_feature_quantizer.v" "fft_frontend.v" "spectrogram_buffer_64x64.v"]
+set SOURCE_FILES [list "recorder_top.v" "i2s_receiver.v" "uart_tx.v" "fft_window_buffer.v" "fft_magnitude.v" "fft_feature_quantizer.v" "fft_frontend.v" "clk_gen.v" "spectrogram_pingpong.v" "cnn_axi_feeder.v" "cnn_anomaly_scorer.v" "cnn_wrapper.v"]
+
+# CNN IP (hls4ml) Verilog source directory — all .v files will be added
+set CNN_IP_DIR "model_hls_output/myproject_prj/solution1/impl/verilog"
 
 # Constraint files configuration
 # Option 1: Use all XDC files in constraints/ directory (default)
