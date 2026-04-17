@@ -65,9 +65,14 @@ module cnn_anomaly_scorer (
                 end
 
                 // Wait for first CNN output and prefetch BRAM
+                // Process first pixel here so it counts toward cmp_cnt
+                // (out_tready is already 1, so the handshake completes)
                 S_WAIT: begin
                     if (out_tvalid) begin
-                        state <= S_COMPARE;
+                        error_sum <= error_sum + {12'd0, abs_diff};
+                        cmp_cnt   <= cmp_cnt + 13'd1;
+                        rd_addr   <= rd_addr + 12'd1;
+                        state     <= S_COMPARE;
                     end
                 end
 

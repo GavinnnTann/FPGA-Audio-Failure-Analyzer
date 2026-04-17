@@ -182,6 +182,8 @@ module recorder_top (
     end
     wire rst_100m_n = rst_100m_n_s2;
 
+    wire [7:0] cnn_dbg_byte_100m;
+
     cnn_wrapper cnn_wrapper_inst (
         .clk          (clk_100m),
         .rst_n        (rst_100m_n),
@@ -190,8 +192,18 @@ module recorder_top (
         .frame_ready  (frame_ready_100m),
         .cnn_busy     (cnn_busy_100m),
         .cnn_done     (cnn_done_100m),
-        .anomaly_score(cnn_anomaly_score_100m)
+        .anomaly_score(cnn_anomaly_score_100m),
+        .dbg_byte     (cnn_dbg_byte_100m)
     );
+
+    // ----------------------------------------------------------------
+    // CDC: CNN debug byte from 100MHz → 12MHz (level sync, slow-changing)
+    // ----------------------------------------------------------------
+    reg [7:0] cnn_dbg_sync1, cnn_dbg_sync2;
+    always @(posedge clk) begin
+        cnn_dbg_sync1 <= cnn_dbg_byte_100m;
+        cnn_dbg_sync2 <= cnn_dbg_sync1;
+    end
 
     // ----------------------------------------------------------------
     // CDC: CNN results from 100MHz → 12MHz
@@ -212,10 +224,16 @@ module recorder_top (
     // anomaly_score bus: latched in 100 MHz, stable when cnn_done arrives
     reg [7:0] cnn_anomaly_score_sync;
     reg       cnn_result_sync;
+    reg       cnn_ran = 1'b0;  // Latches high once CNN completes at least once
     always @(posedge clk) begin
-        if (cnn_done_sync) begin
+        if (!rst_n) begin
+            cnn_anomaly_score_sync <= 8'd0;
+            cnn_result_sync <= 1'b0;
+            cnn_ran <= 1'b0;
+        end else if (cnn_done_sync) begin
             cnn_anomaly_score_sync <= cnn_anomaly_score_100m;
             cnn_result_sync <= (cnn_anomaly_score_100m > CNN_ANOMALY_THRESHOLD);
+            cnn_ran <= 1'b1;
         end
     end
 
@@ -331,18 +349,18 @@ module recorder_top (
                         tx_rms <= 8'hFF;
                     else
                         tx_rms <= window_mean_calc[AMP_SHIFT+7:AMP_SHIFT];
-                    // bit0=1 FPGA active; bit1=1 CNN result valid
-                    tx_flags <= {6'b0, cnn_result_sync, 1'b1};
-                    // CNN anomaly score (MAE, 0-255)
-                    tx_metric <= cnn_anomaly_score_sync;
+                    // bit0=1 FPGA active; bit1=CNN anomaly detected; bit2=CNN has run
+                    tx_flags <= {5'b0, cnn_ran, cnn_result_sync, 1'b1};
+                    // CNN anomaly score or debug byte (debug when CNN hasn't run)
+                    tx_metric <= cnn_ran ? cnn_anomaly_score_sync : cnn_dbg_sync2;
                     tx_chk   <= 8'hAA ^ 8'h55
                                 ^ (cnn_result_sync ? 8'd1 : 8'd0)
                                 ^ (((window_mean_calc >> AMP_SHIFT) > 32'd255)
                                     ? 8'hFF
                                     : window_mean_calc[AMP_SHIFT+7:AMP_SHIFT])
-                                ^ {6'b0, cnn_result_sync, 1'b1}
+                                ^ {5'b0, cnn_ran, cnn_result_sync, 1'b1}
                                 ^ tx_seq
-                                ^ cnn_anomaly_score_sync;
+                                ^ (cnn_ran ? cnn_anomaly_score_sync : cnn_dbg_sync2);
                     if (tx_state == 5'd0)
                         tx_state <= 5'd1;
                 end else begin

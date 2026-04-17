@@ -56,6 +56,7 @@ module cnn_axi_feeder (
 
                 // Wait one cycle for BRAM read latency
                 S_PREFETCH: begin
+                    tvalid <= 1'b0;  // Deassert during BRAM latency
                     state <= S_FEED;
                 end
 
