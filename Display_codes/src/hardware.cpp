@@ -36,10 +36,8 @@ void init_display_panel() {
   tft.fillScreen(TFT_BLACK);
 }
 
-void touchscreen_read(lv_indev_t* indev, lv_indev_data_t* data) {
-  (void)indev;
+void update_touch_state() {
   const unsigned long now = millis();
-
   if (now - previous_touch_timestamp > kTouchCheckIntervalMs) {
     previous_touch_timestamp = now;
     const uint8_t touch_count = ts.touched();
@@ -47,7 +45,6 @@ void touchscreen_read(lv_indev_t* indev, lv_indev_data_t* data) {
       TS_Point p = ts.getPoint(0);
       const int16_t y = map(p.x, 317, 11, 1, TftVerRes);
       const int16_t x = map(p.y, 20, 480, 1, TftHorRes);
-
       last_touch_state = LV_INDEV_STATE_PRESSED;
       last_touch_point.x = x;
       last_touch_point.y = y;
@@ -55,7 +52,15 @@ void touchscreen_read(lv_indev_t* indev, lv_indev_data_t* data) {
       last_touch_state = LV_INDEV_STATE_RELEASED;
     }
   }
+}
 
+bool is_touch_pressed() {
+  return last_touch_state == LV_INDEV_STATE_PRESSED;
+}
+
+void touchscreen_read(lv_indev_t* indev, lv_indev_data_t* data) {
+  (void)indev;
+  update_touch_state();
   data->state = last_touch_state;
   data->point = last_touch_point;
 }

@@ -27,7 +27,7 @@ module recorder_top (
     localparam DECIM            = 6;
     localparam WINDOW_SAMPLES   = 391;     // ~50ms @ 7812.5 Hz
     localparam AMP_SHIFT        = 5;       // scale mean_abs to 8-bit
-    localparam CNN_ANOMALY_THRESHOLD = 8'd30; // CNN MAE anomaly threshold (0-255)
+    localparam CNN_ANOMALY_THRESHOLD = 8'd26; // CNN MAE anomaly threshold (0-255)
 
     // UART: 1,000,000 baud, 8N1 at 12 MHz
     localparam UART_BAUD        = 1_000_000;
@@ -232,7 +232,8 @@ module recorder_top (
             cnn_ran <= 1'b0;
         end else if (cnn_done_sync) begin
             cnn_anomaly_score_sync <= cnn_anomaly_score_100m;
-            cnn_result_sync <= (cnn_anomaly_score_100m > CNN_ANOMALY_THRESHOLD);
+            // Treat threshold as inclusive so MAE=26 is classified as anomaly.
+            cnn_result_sync <= (cnn_anomaly_score_100m >= CNN_ANOMALY_THRESHOLD);
             cnn_ran <= 1'b1;
         end
     end

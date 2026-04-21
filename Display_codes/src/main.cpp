@@ -11,6 +11,8 @@
 #include "screen2_telemetry.h"
 #include "ui.h"
 #include "screens/ui_Screen3.h"
+#include "wifi_config.h"
+#include "wifi_uploader.h"
 
 namespace {
 
@@ -19,6 +21,7 @@ constexpr uint32_t kVibePulseMs = 120;
 constexpr uint32_t kNoDataTimeoutMs = 400;
 constexpr uint32_t kStatsUpdateIntervalMs = 2000;
 constexpr uint16_t kMaxUartBytesPerLoop = 2048;
+constexpr uint32_t kWifiUploadIntervalMs = UPLOAD_INTERVAL_MS;
 
 constexpr uint32_t kFpgaUartBaud = 1000000;
 constexpr int kFpgaUartRxPin = 32;
@@ -32,6 +35,7 @@ lv_display_t* disp = nullptr;
 uint32_t boot_ms = 0;
 uint32_t last_ui_tick_ms = 0;
 uint32_t lv_last_tick_ms = 0;
+uint32_t last_wifi_push_ms = 0;
 
 struct RxStats {
   uint32_t valid = 0;
@@ -292,9 +296,9 @@ void setup() {
       hardware::DrawBufSize,
       MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
 
-  draw_buf_2 = heap_caps_malloc(
-      hardware::DrawBufSize,
-      MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+  // Single draw buffer — second buffer omitted to keep ~25 KB of internal
+  // heap free for the mbedTLS handshake on Core 0.
+  draw_buf_2 = nullptr;
 
   if (draw_buf_1 == nullptr) {
     // Display cannot run without at least one DMA buffer.
@@ -329,6 +333,7 @@ void setup() {
   lv_last_tick_ms = boot_ms;
 
   screen2_telemetry::initialize(boot_ms);
+  wifi_uploader::init();
 
   lv_timer_handler();
   lv_tick_inc(2000);
@@ -378,6 +383,19 @@ void loop() {
     ui_screen3_tick(now);
   }
 
+  // Direct touch navigation for Screen3, checked before lv_timer_handler() so
+  // back-navigation fires without waiting for the canvas render to complete.
+  // LVGL's CLICKED event path can lag by up to one full render cycle (~25ms).
+  if (on_screen3) {
+    hardware::update_touch_state();
+    static bool s3_touch_prev = false;
+    const bool s3_touching = hardware::is_touch_pressed();
+    if (s3_touching && !s3_touch_prev) {
+      lv_disp_load_scr(ui_Screen2);
+    }
+    s3_touch_prev = s3_touching;
+  }
+
   // Screen2 visual updates -- skip when not displayed to save CPU for
   // spectrogram rendering on Screen3.
   if (!on_screen3) {
@@ -396,6 +414,21 @@ void loop() {
       screen2_telemetry::update_uptime_label(now, boot_ms);
       last_ui_tick_ms = now;
     }
+  }
+
+  // Push a telemetry snapshot to WiFi uploader every UPLOAD_INTERVAL_MS.
+  // Only when a valid packet has been received; non-blocking queue push.
+  if (telemetry.has_packet && !telemetry.stale &&
+      (now - last_wifi_push_ms >= kWifiUploadIntervalMs)) {
+    last_wifi_push_ms = now;
+    wifi_uploader::Snapshot snap;
+    snap.device_ms = now;
+    snap.rms       = telemetry.rms;
+    snap.result    = telemetry.result;
+    snap.flags     = telemetry.flags;
+    snap.seq       = telemetry.seq;
+    snap.metric    = telemetry.metric;
+    wifi_uploader::push(snap);
   }
 
   digitalWrite(hardware::VibratorPin, (now < telemetry.vibe_until_ms) ? HIGH : LOW);

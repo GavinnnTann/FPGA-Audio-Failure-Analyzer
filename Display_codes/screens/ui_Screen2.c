@@ -15,6 +15,7 @@ lv_obj_t * ui_Bar1 = NULL;
 lv_obj_t * ui_StatusLabel = NULL;
 lv_obj_t * ui_UptimeLabel = NULL;
 lv_obj_t * ui_FpgaStateLabel = NULL;
+lv_obj_t * ui_WifiLabel = NULL;
 static lv_obj_t * ui_TabView2 = NULL;
 static lv_obj_t * ui_TabPage1 = NULL;
 static lv_obj_t * ui_TabPage2 = NULL;
@@ -234,6 +235,17 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_style_text_align(ui_FpgaStateLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_FpgaStateLabel, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+    // WiFi status label — below FpgaStateLabel, small font to fit layout.
+    ui_WifiLabel = lv_label_create(ui_PanelTelemetry);
+    lv_obj_set_width(ui_WifiLabel, LV_SIZE_CONTENT);
+    lv_obj_set_height(ui_WifiLabel, LV_SIZE_CONTENT);
+    lv_obj_set_x(ui_WifiLabel, -20);
+    lv_obj_set_y(ui_WifiLabel, 8);
+    lv_obj_set_align(ui_WifiLabel, LV_ALIGN_CENTER);
+    lv_label_set_text(ui_WifiLabel, "No WiFi");
+    lv_obj_set_style_text_color(ui_WifiLabel, lv_color_hex(0x8A8A8A), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(ui_WifiLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+
     lv_obj_add_event_cb(ui_Button1, ui_event_Button1_tabview_toggle, LV_EVENT_ALL, NULL);
 }
 
@@ -251,6 +263,7 @@ void ui_Screen2_screen_destroy(void)
     ui_StatusLabel = NULL;
     ui_UptimeLabel = NULL;
     ui_FpgaStateLabel = NULL;
+    ui_WifiLabel = NULL;
     ui_TabView2 = NULL;
     ui_TabPage1 = NULL;
     ui_TabPage2 = NULL;

@@ -1,0 +1,5 @@
+# Reduce mbedTLS record buffer size from 16 KB (default) to 8 KB each.
+# Two record buffers (in + out) consume 32 KB by default; this halves them
+# to 16 KB, freeing ~16 KB of contiguous heap for the TLS handshake on an
+# ESP32 that is simultaneously running WiFi + LVGL draw buffers.
+CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=8192

@@ -11,16 +11,33 @@ lv_obj_t * ui_Panel1 = NULL;
 
 // build functions
 
+extern const lv_image_dsc_t cnn_image;
+
 void ui_Screen1_screen_init(void)
 {
     ui_Screen1 = lv_obj_create(NULL);
     lv_obj_remove_flag(ui_Screen1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Screen1, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui_Screen1, LV_OPA_COVER, LV_PART_MAIN);
 
     ui_Panel1 = lv_obj_create(ui_Screen1);
     lv_obj_set_width(ui_Panel1, 480);
     lv_obj_set_height(ui_Panel1, 320);
     lv_obj_set_align(ui_Panel1, LV_ALIGN_CENTER);
     lv_obj_remove_flag(ui_Panel1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Panel1, lv_color_hex(0x000000), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(ui_Panel1, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(ui_Panel1, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(ui_Panel1, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(ui_Panel1, 0, LV_PART_MAIN);
+
+    /* CNN image — centred on screen. Format: NATIVE_WITH_ALPHA (transparent background).
+       White recolor applied so image content renders white on the dark background. */
+    lv_obj_t * cnn_img_obj = lv_image_create(ui_Panel1);
+    lv_image_set_src(cnn_img_obj, &cnn_image);
+    lv_obj_align(cnn_img_obj, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_style_image_recolor(cnn_img_obj, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_image_recolor_opa(cnn_img_obj, LV_OPA_COVER, LV_PART_MAIN);
 }
 
 void ui_Screen1_screen_destroy(void)

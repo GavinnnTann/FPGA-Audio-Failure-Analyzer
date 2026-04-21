@@ -13,7 +13,7 @@
 
 #include "../ui.h"
 
-#include <stddef.h>
+#include <stdlib.h>
 #include <string.h>
 
 lv_obj_t * ui_Screen3 = NULL;
@@ -26,7 +26,7 @@ enum {
     kCanvasH          = 64,     /* one row per frequency bin                 */
     kBytesPerPx       = 2,      /* RGB565                                    */
     kDisplayScaleX    = 512,    /* 2 × 256  (LVGL: 256 = 1×)                */
-    kDisplayScaleY    = 768,    /* 3 × 256  → visible 460 × 192 px          */
+    kDisplayScaleY    = 512,    /* 2 × 256  → visible 460 × 128 px          */
     kScaleMin         = 300
 };
 
@@ -44,16 +44,16 @@ static uint8_t  spec_data_dirty      = 0;
 static uint32_t last_redraw_ms       = 0;
 static uint16_t last_displayed_scale = 0;
 
-static const uint32_t kMinRedrawIntervalMs = 55;   /* ~18 Hz cap */
+static const uint32_t kMinRedrawIntervalMs = 80;   /* ~12 Hz cap */
 
 /* ---- colour look-up table (amplitude 0-255 → RGB565) -------------------- */
 
 static uint16_t amp_lut[256];
 
-/* ---- canvas pixel buffer  (230 × 64 × 2 = 29 440 bytes) ---------------- */
+/* ---- canvas pixel buffer  (230 × 64 × 2 = 29 440 bytes, heap-allocated) - */
+/* Kept on heap rather than BSS so TLS/WiFi static data can share DRAM.      */
 
-static uint8_t canvas_buf[kCanvasW * kCanvasH * kBytesPerPx]
-    __attribute__((aligned(4)));
+static uint8_t *canvas_buf = NULL;
 
 static const uint32_t kStride = (uint32_t)kCanvasW * kBytesPerPx;
 
@@ -229,7 +229,12 @@ void ui_Screen3_screen_init(void)
                                LV_PART_MAIN | LV_STATE_DEFAULT);
 
     /* ---- Canvas (waterfall pixel buffer) -------------------------------- */
-    memset(canvas_buf, 0, sizeof(canvas_buf));
+    const size_t buf_bytes = (size_t)(kCanvasW * kCanvasH * kBytesPerPx);
+    if (canvas_buf == NULL) {
+        canvas_buf = (uint8_t *)malloc(buf_bytes);
+    }
+    if (canvas_buf == NULL) return; /* allocation failed — bail out */
+    memset(canvas_buf, 0, buf_bytes);
 
     ui_Canvas = lv_canvas_create(ui_Screen3);
     lv_canvas_set_buffer(ui_Canvas, canvas_buf,
@@ -270,6 +275,11 @@ void ui_Screen3_screen_init(void)
 void ui_Screen3_screen_destroy(void)
 {
     if (ui_Screen3) lv_obj_del(ui_Screen3);
+
+    if (canvas_buf != NULL) {
+        free(canvas_buf);
+        canvas_buf = NULL;
+    }
 
     ui_Screen3    = NULL;
     ui_Canvas     = NULL;

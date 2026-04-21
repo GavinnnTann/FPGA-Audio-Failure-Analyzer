@@ -57,7 +57,7 @@ FREQ_AXIS = np.array([k * 4 * BIN_SPACING for k in range(NUM_BINS)])  # Hz
 MAX_LOG_LINES = 500
 SIMILARITY_HISTORY = 200       # number of past similarity values to plot
 ANOMALY_HISTORY = 200          # number of past anomaly score values to plot
-CNN_ANOMALY_THRESHOLD = 30     # same as FPGA: MAE above this = anomaly
+CNN_ANOMALY_THRESHOLD = 26     # same as FPGA: MAE at/above this = anomaly
 
 
 # ---------------------------------------------------------------------------

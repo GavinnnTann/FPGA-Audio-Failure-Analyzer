@@ -5,6 +5,8 @@
 
 #include "failure_dots.h"
 #include "ui.h"
+#include "wifi_uploader.h"
+#include "screens/ui_Screen4.h"
 
 namespace screen2_telemetry {
 
@@ -57,6 +59,11 @@ bool cached_anomaly = false;
 bool cached_fpga_active = false;
 bool cached_cnn_ran = false;
 bool styles_need_restore = false;
+
+// WiFi label debounce: require 3 consecutive identical readings (1.5 s)
+// before flipping the label, so a brief signal wobble doesn't flash the UI.
+bool cached_wifi_ok = false;
+uint8_t wifi_flip_count = 0;
 
 uint8_t median3(uint8_t a, uint8_t b, uint8_t c) {
   if (a > b) {
@@ -211,14 +218,21 @@ void rebuild_sparkline_points() {
   lv_line_set_points(sparkline_obj, spark_points, point_count);
 }
 
+static void sparkline_clicked_cb(lv_event_t * e) {
+  lv_screen_load_anim(ui_Screen4,
+                      LV_SCR_LOAD_ANIM_MOVE_LEFT,
+                      220, 0, false);
+}
+
 void create_center_sparkline() {
   sparkline_obj = lv_line_create(ui_Screen2);
   lv_obj_set_size(sparkline_obj, kSparklineSize, kSparklineSize);
   lv_obj_set_align(sparkline_obj, LV_ALIGN_CENTER);
   lv_obj_set_x(sparkline_obj, -112);
   lv_obj_set_y(sparkline_obj, 0);
-  lv_obj_remove_flag(sparkline_obj, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_flag(sparkline_obj, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_remove_flag(sparkline_obj, LV_OBJ_FLAG_CLICK_FOCUSABLE);
+  lv_obj_add_event_cb(sparkline_obj, sparkline_clicked_cb, LV_EVENT_CLICKED, NULL);
   lv_obj_set_style_bg_opa(sparkline_obj, LV_OPA_TRANSP, LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_border_width(sparkline_obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
   lv_obj_set_style_line_width(sparkline_obj, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -416,6 +430,29 @@ void update_runtime_overlay(uint32_t now_ms, const RuntimeStats& stats) {
       static_cast<unsigned long>(stats.checksum_fail),
       static_cast<unsigned long>(stats.seq_reorder));
   lv_label_set_text(health_info_label, bottom);
+
+  // WiFi label — asymmetric debounce:
+  //   Connecting  : show immediately so the user sees it as soon as it's up.
+  //   Disconnecting: require 3 consecutive readings (1.5 s) to avoid
+  //                  strobing the label during brief hotspot wobbles.
+  const bool wifi_now = wifi_uploader::is_connected();
+  if (wifi_now == cached_wifi_ok) {
+    wifi_flip_count = 0;  // Stable — reset counter.
+  } else if (wifi_now) {
+    // Newly connected — update label immediately, no debounce needed.
+    cached_wifi_ok = true;
+    wifi_flip_count = 0;
+    lv_label_set_text(ui_WifiLabel, "WiFi Connected");
+    lv_obj_set_style_text_color(ui_WifiLabel, lv_color_hex(0x20CF2A),
+        LV_PART_MAIN | LV_STATE_DEFAULT);
+  } else if (++wifi_flip_count >= 3) {
+    // Disconnected for 3 consecutive checks (1.5 s) — now show No WiFi.
+    cached_wifi_ok = false;
+    wifi_flip_count = 0;
+    lv_label_set_text(ui_WifiLabel, "No WiFi");
+    lv_obj_set_style_text_color(ui_WifiLabel, lv_color_hex(0x8A8A8A),
+        LV_PART_MAIN | LV_STATE_DEFAULT);
+  }
 }
 
 void on_valid_packet(
