@@ -55,6 +55,7 @@ lv_obj_t* sparkline_obj = nullptr;
 // Cached state for change-detection on LVGL style sets.
 bool cached_anomaly = false;
 bool cached_fpga_active = false;
+bool cached_cnn_ran = false;
 bool styles_need_restore = false;
 
 uint8_t median3(uint8_t a, uint8_t b, uint8_t c) {
@@ -233,7 +234,7 @@ void create_overlay_labels() {
   lv_obj_set_width(severity_info_label, 176);
   lv_obj_set_height(severity_info_label, LV_SIZE_CONTENT);
   lv_obj_set_align(severity_info_label, LV_ALIGN_CENTER);
-  lv_obj_set_x(severity_info_label, 140);
+  lv_obj_set_x(severity_info_label, 118);
   lv_obj_set_y(severity_info_label, 42);
   lv_label_set_long_mode(severity_info_label, LV_LABEL_LONG_WRAP);
   lv_label_set_text(severity_info_label, "Severity:\n0% Low\nRMS 0\n10s 0-0");
@@ -244,7 +245,7 @@ void create_overlay_labels() {
   lv_obj_set_width(health_info_label, 176);
   lv_obj_set_height(health_info_label, LV_SIZE_CONTENT);
   lv_obj_set_align(health_info_label, LV_ALIGN_CENTER);
-  lv_obj_set_x(health_info_label, 140);
+  lv_obj_set_x(health_info_label, 118);
   lv_obj_set_y(health_info_label, 92);
   lv_label_set_long_mode(health_info_label, LV_LABEL_LONG_WRAP);
   lv_label_set_text(health_info_label, "Health:\nLast 0s\n1m 0\nD/F/R 0/0/0");
@@ -274,6 +275,7 @@ void initialize(uint32_t boot_ms) {
   styles_need_restore = false;
   cached_anomaly = false;
   cached_fpga_active = false;
+  cached_cnn_ran = false;
   last_dot_total_sec = 0;
 
   lv_arc_set_range(ui_Arc1, 0, 359);
@@ -283,7 +285,7 @@ void initialize(uint32_t boot_ms) {
   lv_obj_set_style_arc_color(ui_Arc1, lv_color_hex(0x5A5A5A), LV_PART_INDICATOR | LV_STATE_DEFAULT);
 
   lv_label_set_text(ui_UptimeLabel, "00:00:00");
-  lv_label_set_text(ui_FpgaStateLabel, "Sleep");
+  lv_label_set_text(ui_FpgaStateLabel, "Sleep\nCNN Wait");
   set_stale_ui(true);
 
   create_center_sparkline();
@@ -296,7 +298,7 @@ void set_stale_ui(bool stale) {
   if (stale) {
     lv_label_set_text(ui_StatusLabel, "No Data");
     lv_obj_set_style_text_color(ui_StatusLabel, lv_color_hex(0x8A8A8A), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_label_set_text(ui_FpgaStateLabel, "Sleep");
+    lv_label_set_text(ui_FpgaStateLabel, "Sleep\nCNN Wait");
     lv_obj_set_style_text_color(ui_FpgaStateLabel, lv_color_hex(0x8A8A8A), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_color(ui_Arc1, lv_color_hex(0x7A7A7A), LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_color(ui_Bar1, lv_color_hex(0x7A7A7A), LV_PART_INDICATOR | LV_STATE_DEFAULT);
@@ -383,11 +385,17 @@ void update_runtime_overlay(uint32_t now_ms, const RuntimeStats& stats) {
   uint8_t max_rms = 0;
   get_rms_window_min_max(&min_rms, &max_rms);
 
-  char top[120];
+  const bool cnn_ran = ((telemetry.flags & 0x04U) != 0U);
+  const char* cnn_tag = cnn_ran ? (telemetry.metric >= 30U ? "ANOM" : "OK")
+                                : "--";
+
+  char top[140];
   std::snprintf(
       top,
       sizeof(top),
-      "Severity:\n%u%% %s\nRMS %u\n10s %u-%u",
+      "CNN MAE %u/255 [%s]\n%u%% %s | RMS %u\n10s %u-%u",
+      static_cast<unsigned>(telemetry.metric),
+      cnn_tag,
       static_cast<unsigned>(severity),
       severity_band(severity),
       static_cast<unsigned>(telemetry.rms),
@@ -455,12 +463,9 @@ void on_valid_packet(
     telemetry.rms_peak = telemetry.rms_floor + kNormMinRange;
   }
 
-  float norm =
-      (telemetry.rms_filtered - telemetry.rms_floor) / (telemetry.rms_peak - telemetry.rms_floor);
-  norm = clampf(norm, 0.0f, 1.0f);
-
-  const float norm_compressed = std::log1pf(kNormSoftK * norm) / std::log1pf(kNormSoftK);
-  telemetry.rms_target = 255.0f * norm_compressed;
+  // Bar displays CNN MAE score (0-255); holds at zero until CNN runs.
+  const bool cnn_ran = ((flags & 0x04U) != 0U);
+  telemetry.rms_target = cnn_ran ? static_cast<float>(metric) : 0.0f;
 
   telemetry.result = result;
   telemetry.rms = median_rms;
@@ -479,19 +484,30 @@ void on_valid_packet(
   // The data/filter state above is still maintained so Screen2
   // resumes smoothly once visible again.
   if (!skip_ui) {
-    // Only touch LVGL widgets when values actually changed.
-    if (anomaly != cached_anomaly) {
+    const bool status_changed = (anomaly != cached_anomaly);
+    const bool fpga_changed = (fpga_active != cached_fpga_active ||
+                               cnn_ran != cached_cnn_ran);
+
+    if (status_changed) {
       cached_anomaly = anomaly;
       update_status_label(anomaly);
     }
-    if (fpga_active != cached_fpga_active) {
+    if (fpga_changed) {
       cached_fpga_active = fpga_active;
-      lv_label_set_text(ui_FpgaStateLabel, fpga_active ? "Active" : "Sleep");
+      cached_cnn_ran = cnn_ran;
+      char fpga_line[32];
+      std::snprintf(fpga_line, sizeof(fpga_line), "%s\n%s",
+                    fpga_active ? "Active" : "Sleep",
+                    cnn_ran ? "CNN Live" : "CNN Wait");
+      lv_label_set_text(ui_FpgaStateLabel, fpga_line);
+      // Color-code by CNN state: green=live, amber=waiting.
+      lv_obj_set_style_text_color(ui_FpgaStateLabel,
+          cnn_ran ? lv_color_hex(0x20CF2A) : lv_color_hex(0xE88A1A),
+          LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     // Restore bar/arc colors once after a stale period, not every packet.
     if (styles_need_restore) {
       styles_need_restore = false;
-      lv_obj_set_style_text_color(ui_FpgaStateLabel, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
       lv_obj_set_style_arc_color(ui_Arc1, lv_color_hex(0x5A5A5A), LV_PART_INDICATOR | LV_STATE_DEFAULT);
       lv_obj_set_style_bg_color(ui_Bar1, lv_color_hex(0xB81010), LV_PART_INDICATOR | LV_STATE_DEFAULT);
       lv_obj_set_style_bg_grad_color(ui_Bar1, lv_color_hex(0x20CF2A), LV_PART_INDICATOR | LV_STATE_DEFAULT);
