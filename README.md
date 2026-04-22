@@ -68,7 +68,13 @@ INMP441 (I2S Mic, 46.875 kHz)
        │
        MAE Scorer → NORMAL / ABNORMAL classification
        │
-       Dual UART (1 Mbaud) → ESP32 display + PC viewer
+      Dual UART (1 Mbaud) → ESP32 display + PC viewer
+             │
+             └─ ESP32 Wi-Fi uploader (HTTP POST)
+              │
+              └─ Supabase `telemetry` table
+                    │
+                    └─ Next.js web dashboard (realtime)
 ```
 
 ### Hardware
@@ -107,7 +113,7 @@ Digital audio captured via I2S from INMP441 at 46.875 kHz, 24-bit.
 - **Output:** Reconstructed 64×64×1 → MAE compared against input
 - **Clock:** 100 MHz (dedicated domain via MMCM)
 - **Latency:** ~178,600 cycles = 1.786 ms per inference
-- **Anomaly threshold:** MAE ≥ 30/255 → ABNORMAL
+- **Anomaly threshold:** MAE >= 26/255 → ABNORMAL
 - **Double-buffered** via ping-pong BRAM so FFT writes don't stall CNN reads
 
 ### 4. Communication
@@ -122,6 +128,23 @@ Digital audio captured via I2S from INMP441 at 46.875 kHz, 24-bit.
 ### 5. Display Interface (ESP32)
 - Receives UART packets
 - Updates LVGL-based UI: system state (NORMAL/ABNORMAL), RMS bar, spectral indicators
+
+### 6. Cloud Telemetry Upload (ESP32 Wi-Fi)
+- ESP32 runs a non-blocking uploader task pinned to **Core 0** (radio core) so TLS/HTTP cannot stall UI/UART on Core 1
+- Telemetry snapshots are queued and uploaded to Supabase via HTTPS REST endpoint:
+  - Endpoint: `/rest/v1/telemetry`
+  - Method: `POST` with `apikey` and `Authorization: Bearer <anon key>`
+  - Upload cadence: configurable via `UPLOAD_INTERVAL_MS` (default 2000 ms)
+- Payload fields uploaded: `device_ms`, `rms`, `result`, `seq`, `metric`, `anomaly`, `cnn_ran`, `fpga_active`
+
+### 7. Web Dashboard (Next.js + Supabase Realtime)
+- Web app subscribes to inserts on Supabase `telemetry` table using `@supabase/supabase-js`
+- Displays:
+  - Live status (LIVE / NO DATA)
+  - RMS timeline with anomaly markers
+  - Anomaly rate and packet counters
+  - Raw telemetry feed (`rms`, `result`, `seq`, `metric`, `flags`, `cnn_ran`, `fpga_active`)
+- Dashboard app path: `Display_codes/Audio Failure Analyzer Dashboard/`
 
 ---
 
@@ -169,6 +192,9 @@ All timing met (WNS = 1.101 ns on 100 MHz CNN clock).
 │   └── spectrogram_viewer.py  Real-time Python viewer (tkinter + matplotlib)
 ├── testbench/             Simulation testbenches
 ├── Display_codes/         ESP32 LVGL display firmware (PlatformIO)
+│   ├── src/wifi_uploader.cpp   ESP32 Core0 Wi-Fi + Supabase uploader task
+│   ├── src/example_wifi_config.h  Wi-Fi/Supabase config template
+│   └── Audio Failure Analyzer Dashboard/  Next.js realtime web dashboard
 ├── Documentations/        Detailed technical documentation
 ├── build_reports/         Vivado synthesis/implementation logs
 ├── CMOD_A7_PROJECT_REFERENCE.md   Comprehensive technical reference
@@ -203,6 +229,30 @@ python tools/spectrogram_viewer.py
 ```
 Select the COM port, connect at 1 Mbaud, and observe real-time spectrogram, CNN anomaly status, and comparison tools.
 
+### Enable Wi-Fi + Supabase Upload (ESP32)
+1. Copy `Display_codes/src/example_wifi_config.h` to `Display_codes/src/wifi_config.h`.
+2. Fill in:
+  - `WIFI_SSID`, `WIFI_PASS`
+  - `SUPABASE_HOST`, `SUPABASE_KEY`, `SUPABASE_TABLE`
+3. In Supabase SQL editor, create the `telemetry` table and RLS policy as documented in `example_wifi_config.h`.
+4. Build and flash ESP32 firmware from `Display_codes/` (PlatformIO).
+
+### Run Web Dashboard
+```powershell
+cd "Display_codes/Audio Failure Analyzer Dashboard"
+npm install
+copy .env.local.example .env.local
+```
+Edit `.env.local`:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+Then start the app:
+```powershell
+npm run dev
+```
+Open `http://localhost:3000` to view live telemetry.
+
 ---
 
 ## Documentation Index
@@ -216,6 +266,8 @@ Select the COM port, connect at 1 Mbaud, and observe real-time spectrogram, CNN 
 | [Documentations/BUILD_SUMMARY.md](Documentations/BUILD_SUMMARY.md) | Build reports (resource utilization, timing) |
 | [Documentations/INSTRUCTIONS.md](Documentations/INSTRUCTIONS.md) | DSL Starter Kit hardware configuration & pin reference |
 | [Display_codes/UART_UI_Constraints.md](Display_codes/UART_UI_Constraints.md) | ESP32 display UI constraints |
+| [Display_codes/src/example_wifi_config.h](Display_codes/src/example_wifi_config.h) | Wi-Fi + Supabase setup template (table schema, RLS, credentials) |
+| [Display_codes/Audio Failure Analyzer Dashboard](Display_codes/Audio Failure Analyzer Dashboard) | Next.js + Supabase realtime monitoring dashboard |
 | [testbench/README.md](testbench/README.md) | Simulation and testbench guide |
 
 ---
@@ -230,6 +282,8 @@ Select the COM port, connect at 1 Mbaud, and observe real-time spectrogram, CNN 
 - CNN autoencoder inference on-FPGA (100 MHz, MAE scoring)
 - Dual UART output (ESP32 + USB debug) at 1 Mbaud
 - ESP32 LVGL display with spectrogram and status UI
+- ESP32 Wi-Fi telemetry upload to Supabase (non-blocking background task)
+- Next.js web dashboard for realtime telemetry and anomaly monitoring
 - Python real-time viewer with blit rendering, diagnostics, and comparison tools
 - Backpressure regression testbench
 
