@@ -113,15 +113,10 @@ static void uploader_task(void* /*arg*/) {
     char body[256];
     build_json(body, sizeof(body), snap);
 
-    // Print heap stats every attempt so we can diagnose allocation failures.
-    Serial.printf("[wifi_uploader] heap: free=%u maxBlock=%u\n",
-                  ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-
     // getMaxAllocHeap() is the largest single contiguous free block.
     // mbedTLS needs ~36 KB contiguous (16 KB in + 4 KB out + ~16 KB overhead).
     const uint32_t max_block = ESP.getMaxAllocHeap();
     if (max_block < 40000U) {
-      Serial.printf("[wifi_uploader] low heap: maxBlock=%u, skipping\n", max_block);
       vTaskDelay(pdMS_TO_TICKS(2000));
       continue;
     }
@@ -142,15 +137,7 @@ static void uploader_task(void* /*arg*/) {
       http.setTimeout(kHttpTimeoutMs);
 
       const int code = http.POST(String(body));
-      if (code == 201) {
-        Serial.println("[wifi_uploader] POST OK (201)");
-      } else if (code > 0) {
-        Serial.printf("[wifi_uploader] POST failed %d: %s\n",
-                      code, http.getString().c_str());
-      } else {
-        Serial.printf("[wifi_uploader] POST error: %s\n",
-                      HTTPClient::errorToString(code).c_str());
-      }
+      (void)code;
       http.end();
     }
   }
@@ -163,7 +150,6 @@ static void uploader_task(void* /*arg*/) {
 void init() {
   snap_queue = xQueueCreate(kQueueDepth, sizeof(Snapshot));
   if (snap_queue == nullptr) {
-    Serial.println("[wifi_uploader] queue alloc failed");
     return;
   }
 
@@ -179,9 +165,7 @@ void init() {
       nullptr,
       0);       // Core 0
 
-  if (rc != pdPASS) {
-    Serial.println("[wifi_uploader] task create failed");
-  }
+  (void)rc;
 }
 
 void push(const Snapshot& snap) {

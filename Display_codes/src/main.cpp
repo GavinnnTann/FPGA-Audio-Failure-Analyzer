@@ -201,6 +201,7 @@ void parse_uart2_stream(uint32_t now_ms, uint16_t max_bytes) {
   uint16_t processed = 0;
   while (fpga_uart.available() > 0 && processed < max_bytes) {
     const uint8_t b = static_cast<uint8_t>(fpga_uart.read());
+    Serial.write(b);  // Forward raw FPGA bytes to PC over USB serial
     processed++;
 
     switch (rx_state) {
@@ -284,7 +285,7 @@ void parse_uart2_stream(uint32_t now_ms, uint16_t max_bytes) {
 }  // namespace
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(1000000);  // Match FPGA baud rate for raw stream forwarding to PC
 
   hardware::init_board_pins();
   hardware::init_touchscreen();
