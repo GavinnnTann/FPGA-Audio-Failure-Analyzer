@@ -391,6 +391,16 @@ class SpectrogramApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.minsize(1600, 900)
         self.root.configure(bg="#2b2b2b")
+        # Open maximized by default for lab use (cross-platform fallback).
+        try:
+            self.root.state("zoomed")  # Windows
+        except tk.TclError:
+            try:
+                self.root.attributes("-zoomed", True)  # Some Linux WMs
+            except tk.TclError:
+                sw = self.root.winfo_screenwidth()
+                sh = self.root.winfo_screenheight()
+                self.root.geometry(f"{sw}x{sh}+0+0")
 
         # ---- Dark theme for ttk widgets ----
         BG       = "#2b2b2b"
@@ -433,6 +443,21 @@ class SpectrogramApp:
                          bordercolor=BORDER)
         style.configure("TPanedwindow", background=BG)
         style.configure("Sash", sashthickness=6, background=BORDER)
+        style.configure("TNotebook", background=BG, borderwidth=0, tabmargins=[2, 2, 2, 0])
+        style.configure(
+            "TNotebook.Tab",
+            background=BG_DARK,
+            foreground=FG,
+            bordercolor=BORDER,
+            lightcolor=BG_DARK,
+            darkcolor=BG_DARK,
+            padding=(10, 4),
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", "#3f3f3f"), ("active", "#474747")],
+            foreground=[("selected", "#ffffff"), ("active", "#ffffff"), ("!selected", FG)],
+        )
 
         # Make tk Combobox popdown dark
         self.root.option_add("*TCombobox*Listbox.background", ENTRY_BG)

@@ -2,6 +2,8 @@
 
 ## Project Context
 
+This project is part of the Singapore University of Technology and Design (SUTD) Term 6 Digital Signals Lab 2026. The course is conducted and supervised by Prof. Teo Tee Hui.
+
 Modern 3D printers are typically monitored using vision-based systems (cameras + CV models), manual inspection, or post-failure diagnostics. These approaches share several limitations:
 
 - Continuous video streaming is computationally expensive
@@ -292,5 +294,9 @@ Open `http://localhost:3000` to view live telemetry.
 - Sensitive to environmental noise
 - Model generalization across printer types not yet validated
 - Power signoff workflow not yet run
+
+### Contributors
+- Gavin Tan from SUTD-EPD Class of 2027
+- Eric Aleong from University of Waterloo Mechatronics
 
 ---
