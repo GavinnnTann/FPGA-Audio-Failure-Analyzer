@@ -21,6 +21,8 @@ Usage:
 import threading
 import time
 from collections import deque
+import ctypes
+import sys
 
 import serial
 import serial.tools.list_ports
@@ -309,7 +311,9 @@ class WaveformSimulator:
     """
 
     def __init__(self):
-        self.enabled = True
+        self.enabled = False
+        self.noise_enabled = False
+        self.noise_amplitude = 0.05   # fraction of full-scale (0.0 – 1.0)
         self.waveform = "sine"
         self.frequency = 1000.0   # Hz
         self.amplitude = 0.8      # 0 .. 1
@@ -346,12 +350,60 @@ class WaveformSimulator:
         # Scale to 16-bit range (matching FPGA I2S path: raw_s16 = sample[23:8])
         sig *= self.amplitude * 32767.0
 
+        # Optional Gaussian noise (simulates real-world interference / noise floor)
+        if self.noise_enabled:
+            sig += np.random.normal(0.0, self.noise_amplitude * 32767.0, FFT_N)
+
         # Hann window -> FFT -> magnitude of first 256 bins -> every-4th downsample
         fft_mag = np.abs(np.fft.fft(sig * self._hann))
         self.spectrum = fft_mag[::4][:NUM_BINS]
 
         self.waterfall = np.roll(self.waterfall, 1, axis=0)
         self.waterfall[0, :] = self.spectrum
+
+
+# ---------------------------------------------------------------------------
+# Tooltip helper
+# ---------------------------------------------------------------------------
+class _Tooltip:
+    """Simple hover tooltip for a tkinter widget."""
+
+    def __init__(self, widget, text, delay=400):
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self._tip_window = None
+        self._after_id = None
+        widget.bind("<Enter>", self._schedule_show)
+        widget.bind("<Leave>", self._hide)
+        widget.bind("<ButtonPress>", self._hide)
+
+    def _schedule_show(self, event=None):
+        self._after_id = self.widget.after(self.delay, self._show)
+
+    def _show(self):
+        if self._tip_window:
+            return
+        x = self.widget.winfo_rootx() + self.widget.winfo_width() + 6
+        y = self.widget.winfo_rooty()
+        self._tip_window = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        tw.configure(bg="#1e1e1e", highlightbackground="#555555", highlightthickness=1)
+        lbl = tk.Label(
+            tw, text=self.text, justify=tk.LEFT,
+            background="#1e1e1e", foreground="#cccccc",
+            font=("Segoe UI", 8), wraplength=320, padx=8, pady=6,
+        )
+        lbl.pack()
+
+    def _hide(self, event=None):
+        if self._after_id:
+            self.widget.after_cancel(self._after_id)
+            self._after_id = None
+        if self._tip_window:
+            self._tip_window.destroy()
+            self._tip_window = None
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +443,7 @@ class SpectrogramApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.minsize(1600, 900)
         self.root.configure(bg="#2b2b2b")
+        self._apply_dark_titlebar()
         # Open maximized by default for lab use (cross-platform fallback).
         try:
             self.root.state("zoomed")  # Windows
@@ -430,6 +483,21 @@ class SpectrogramApp:
                          bordercolor=BORDER, padding=(6, 2))
         style.map("TButton",
                    background=[("active", "#505050"), ("pressed", "#606060")])
+        style.configure("ToggleOn.TButton", background="#2a5c2a", foreground="#88ee88",
+                         bordercolor="#3a7a33", padding=(6, 2))
+        style.map("ToggleOn.TButton",
+                   background=[("active", "#336633"), ("pressed", "#3d7a3d")],
+                   foreground=[("active", "#aaffaa")])
+        style.configure("ToggleOff.TButton", background=ACCENT, foreground=FG_DIM,
+                         bordercolor=BORDER, padding=(6, 2))
+        style.map("ToggleOff.TButton",
+                   background=[("active", "#505050"), ("pressed", "#606060")],
+                   foreground=[("active", FG)])
+        style.configure("NoiseOn.TButton", background="#5c3a1a", foreground="#ddaa55",
+                         bordercolor="#7a5020", padding=(6, 2))
+        style.map("NoiseOn.TButton",
+                   background=[("active", "#6b4520"), ("pressed", "#7a5025")],
+                   foreground=[("active", "#ffcc77")])
         style.configure("TEntry", fieldbackground=ENTRY_BG, foreground=FG,
                          insertcolor=FG, bordercolor=BORDER)
         style.configure("TCombobox", fieldbackground=ENTRY_BG, foreground=FG,
@@ -467,6 +535,30 @@ class SpectrogramApp:
 
         self._build_ui()
         self._schedule_update()
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _apply_dark_titlebar():
+        """Ask Windows to render the title bar in dark mode.
+
+        Uses DwmSetWindowAttribute (DWMWA_USE_IMMERSIVE_DARK_MODE = 20).
+        Silently ignored on non-Windows platforms or older Windows versions.
+        """
+        if sys.platform != "win32":
+            return
+        try:
+            hwnd = ctypes.windll.user32.GetForegroundWindow()
+            # Attribute 20 = DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 11 / 10 21H1+)
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+            value = ctypes.c_int(1)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                ctypes.byref(value),
+                ctypes.sizeof(value),
+            )
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -628,11 +720,51 @@ class SpectrogramApp:
         wave_cb.pack(side=tk.LEFT, padx=(0, 10))
         wave_cb.bind("<<ComboboxSelected>>", self._on_sim_param_change)
 
-        self.sim_enable_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
-            ctrl1, text="Enable", variable=self.sim_enable_var,
-            command=self._on_sim_param_change,
-        ).pack(side=tk.LEFT, padx=(0, 10))
+        self.sim_enable_var = tk.BooleanVar(value=False)
+        self._sim_toggle_btn = ttk.Button(
+            ctrl1, text="OFF", style="ToggleOff.TButton", width=5,
+            command=self._toggle_sim_enable,
+        )
+        self._sim_toggle_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.sim_noise_var = tk.BooleanVar(value=False)
+        self._noise_toggle_btn = ttk.Button(
+            ctrl1, text="Noise: OFF", style="ToggleOff.TButton", width=10,
+            command=self._toggle_sim_noise,
+        )
+        self._noise_toggle_btn.pack(side=tk.LEFT, padx=(0, 4))
+
+        info_lbl = ttk.Label(ctrl1, text=" ⓘ ", cursor="question_arrow",
+                              font=("Segoe UI", 10, "bold"), foreground="#44bbff")
+        info_lbl.pack(side=tk.LEFT, padx=(0, 10))
+        _Tooltip(
+            info_lbl,
+            "Noise: Adds Gaussian white noise to the simulated waveform before the FFT.\n\n"
+            "Effect on the spectrogram:\n"
+            "  \u2022 Raises the noise floor uniformly across all frequency bins\n"
+            "  \u2022 Weaker frequency peaks become harder to distinguish\n"
+            "  \u2022 Mimics real-world MEMS microphone thermal noise and\n"
+            "    environmental interference\n\n"
+            "Useful for testing CNN autoencoder robustness \u2014 a model trained\n"
+            "on clean audio may flag noisy input as anomalous.",
+        )
+
+        # -- Row 1b: noise amplitude slider (always shown; only active when noise ON) --
+        ctrl1b = ttk.Frame(right_frame)
+        ctrl1b.pack(fill=tk.X, padx=4, pady=(2, 0))
+
+        ttk.Label(ctrl1b, text="Noise Amp:").pack(side=tk.LEFT, padx=(0, 2))
+        self.noise_amp_var = tk.DoubleVar(value=0.05)
+        self.noise_amp_scale = ttk.Scale(
+            ctrl1b, from_=0.0, to=1.0, orient=tk.HORIZONTAL,
+            variable=self.noise_amp_var, command=self._on_noise_amp_slider,
+        )
+        self.noise_amp_scale.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
+        self.noise_amp_entry = ttk.Entry(ctrl1b, width=5)
+        self.noise_amp_entry.insert(0, "0.05")
+        self.noise_amp_entry.pack(side=tk.LEFT, padx=(0, 2))
+        self.noise_amp_entry.bind("<Return>", self._on_noise_amp_entry)
+        ttk.Label(ctrl1b, text="\u03c3").pack(side=tk.LEFT)  # sigma symbol
 
         # -- Row 2: frequency --
         ctrl2 = ttk.Frame(right_frame)
@@ -876,6 +1008,191 @@ class SpectrogramApp:
         self.diag_text.tag_configure("ok", foreground="#00cc66")
         self.diag_text.tag_configure("bad", foreground="#ff5555")
 
+        # --- Tab 5: Info ---
+        info_frame = ttk.Frame(bottom_nb)
+        bottom_nb.add(info_frame, text="Info")
+        self._build_info_tab(info_frame)
+
+    # ------------------------------------------------------------------
+    def _build_info_tab(self, parent):
+        """Populate the Info tab with project overview content."""
+        BG      = "#1e1e1e"
+        FG      = "#cccccc"
+        FG_DIM  = "#888888"
+        ACCENT  = "#44bbff"
+        GREEN   = "#88ee88"
+        AMBER   = "#ddaa55"
+
+        canvas = tk.Canvas(parent, bg=BG, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        inner = ttk.Frame(canvas)
+        inner.configure(style="TFrame")
+        window_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _on_resize(event):
+            canvas.itemconfig(window_id, width=event.width)
+        canvas.bind("<Configure>", _on_resize)
+
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        inner.bind("<Configure>", _on_frame_configure)
+
+        # Mouse-wheel scroll
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        def section(text, color=ACCENT, size=11, pad_top=12):
+            ttk.Label(
+                inner, text=text,
+                font=("Segoe UI", size, "bold"),
+                foreground=color, background=BG,
+            ).pack(anchor="w", padx=16, pady=(pad_top, 2))
+
+        def body(text, color=FG, size=9):
+            ttk.Label(
+                inner, text=text,
+                font=("Segoe UI", size),
+                foreground=color, background=BG,
+                wraplength=900, justify=tk.LEFT,
+            ).pack(anchor="w", padx=24, pady=(0, 2))
+
+        def divider():
+            tk.Frame(inner, height=1, bg="#333333").pack(fill=tk.X, padx=16, pady=6)
+
+        # ── Title block ──────────────────────────────────────────────────
+        ttk.Label(
+            inner,
+            text="FPGA Acoustic Anomaly Detection — Spectrogram Viewer",
+            font=("Segoe UI", 13, "bold"),
+            foreground="#ffffff", background=BG,
+        ).pack(anchor="w", padx=16, pady=(14, 0))
+        ttk.Label(
+            inner,
+            text="Real-time UART visualiser · Software FFT simulator · CNN anomaly monitor",
+            font=("Segoe UI", 9, "italic"),
+            foreground=FG_DIM, background=BG,
+        ).pack(anchor="w", padx=16, pady=(0, 4))
+        divider()
+
+        # ── Project / Course ─────────────────────────────────────────────
+        section("Project & Course")
+        body(f"Course:    SUTD-EPD 50.002  Digital Systems Laboratory", color=GREEN)
+        body(f"Instructor: Prof Teo Tee Hui  (Singapore University of Technology and Design)")
+        body(f"Creator:    Gavin Tan")
+        body(f"Term:       Term 6, Academic Year 2025 / 2026")
+        divider()
+
+        # ── Project Overview ─────────────────────────────────────────────
+        section("Project Overview")
+        body(
+            "This project implements an end-to-end acoustic anomaly detection pipeline entirely "
+            "on a Digilent CMOD A7-35T FPGA (Artix-7 xc7a35tcpg236-1). An INMP441 MEMS "
+            "microphone streams I²S audio at 46 875 Hz. The FPGA computes a real-time 512-point "
+            "FFT, condenses the spectrum into 64 frequency bins, and feeds it through a CNN "
+            "autoencoder (synthesised with hls4ml) that reconstructs the normal audio signature. "
+            "The mean absolute error (MAE) between the input and reconstruction is thresholded "
+            "to classify audio as NORMAL or ABNORMAL."
+        )
+        divider()
+
+        # ── What This Tool Does ──────────────────────────────────────────
+        section("What This Spectrogram Viewer Does")
+        body(
+            "This Python GUI connects to the FPGA over UART (1 Mbaud, 8N1) and provides four "
+            "parallel views of the system in real time:"
+        )
+        for bullet, color in [
+            ("Live UART panel — displays the 64-bin frequency spectrum and scrolling waterfall "
+             "directly from the FPGA. Each spectrogram sweep is assembled from 64 individual "
+             "6-byte packets (0xDD 0x77 …).", FG),
+            ("CNN Anomaly status — decodes the 8-byte telemetry frame (0xAA 0x55 …) and "
+             "shows the MAE score, anomaly flag, FPGA active flag, and CNN run flag with "
+             f"colour-coded severity. Threshold: MAE ≥ {CNN_ANOMALY_THRESHOLD}/255 → ABNORMAL.", AMBER),
+            ("Waveform Simulator — generates synthetic test signals (sine, square, sawtooth, "
+             "triangle) through the same Hann-windowed 512-pt FFT pipeline used on the FPGA, "
+             "so you can compare the theoretical spectrum shape against live hardware output.", FG),
+            ("Comparison panel — overlays normalised live and simulated spectra, plots cosine "
+             "similarity, Pearson correlation, and RMSE history, and tracks the anomaly MAE "
+             "score over time.", FG),
+        ]:
+            ttk.Label(
+                inner, text=f"  •  {bullet}",
+                font=("Segoe UI", 9),
+                foreground=color, background=BG,
+                wraplength=900, justify=tk.LEFT,
+            ).pack(anchor="w", padx=32, pady=(1, 1))
+        divider()
+
+        # ── Hardware Pipeline ────────────────────────────────────────────
+        section("Hardware Pipeline (FPGA → Cloud)")
+        for step, desc in [
+            ("INMP441 MEMS mic",    "I²S PDM → 24-bit PCM at 46 875 Hz (12 MHz BCLK / 256)"),
+            ("I²S Receiver",        "Captures left-channel 24-bit samples; top 16 bits forwarded"),
+            ("Hann Window + FFT",   "512-point Xilinx xfft_1 v9.1 (pipelined streaming, 24-bit in / 34-bit out)"),
+            ("Magnitude + Downsamp","34-bit complex → magnitude; every 4th of 256 bins → 64 output bins"),
+            ("Ping-Pong Buffers",   "Double-buffer isolates FFT fill from CNN read (100 MHz domain)"),
+            ("CNN Autoencoder",     "hls4ml 64×64 network; MAE scorer; result latched every frame"),
+            ("UART Packetiser",     "Two frame types: 8-byte telemetry + 64 × 6-byte spectrogram burst"),
+            ("ESP32 Wi-Fi Upload",  "Parses UART on Core 1; POSTs telemetry to Supabase on Core 0"),
+            ("Next.js Dashboard",   "Realtime web dashboard via @supabase/supabase-js subscriptions"),
+        ]:
+            ttk.Label(
+                inner, text=f"  {step:<26}  {desc}",
+                font=("Consolas", 8),
+                foreground=FG, background=BG,
+            ).pack(anchor="w", padx=32, pady=(1, 0))
+        divider()
+
+        # ── UART Protocol Summary ────────────────────────────────────────
+        section("UART Protocol Summary")
+        body("Baud: 1 000 000  •  8N1  •  Two output ports: J18 → USB, N3 → ESP32")
+        ttk.Label(
+            inner,
+            text=(
+                "  Telemetry frame (8 bytes):   AA 55  result  rms  flags  seq  metric  checksum\n"
+                "  Spectrogram slice (6 bytes):  DD 77  bin_idx  bin_lo  bin_hi  checksum\n"
+                "  Checksum: XOR of all preceding bytes in the frame\n"
+                f"  Anomaly threshold: MAE ≥ {CNN_ANOMALY_THRESHOLD} / 255"
+            ),
+            font=("Consolas", 8),
+            foreground=FG, background=BG,
+            justify=tk.LEFT,
+        ).pack(anchor="w", padx=32, pady=(2, 2))
+        divider()
+
+        # ── Keyboard / Usage Tips ────────────────────────────────────────
+        section("Usage Tips")
+        for tip in [
+            "Select the correct COM port and click Connect to start receiving live data.",
+            "Use the Waveform Simulator (enable the toggle) to generate a reference tone and compare"
+            " spectral shape against the live FPGA output in the Comparison tab.",
+            "Enable Noise + adjust the σ slider to simulate a raised noise floor and observe its"
+            " effect on the waterfall and CNN anomaly score.",
+            "The Diagnostics tab shows sweep rate, inter-sweep jitter, error counts, and GUI"
+            " render performance in real time.",
+            "The Serial Monitor tab lets you inspect raw UART frames and toggle hex / decoded views.",
+        ]:
+            ttk.Label(
+                inner, text=f"  •  {tip}",
+                font=("Segoe UI", 9),
+                foreground=FG, background=BG,
+                wraplength=900, justify=tk.LEFT,
+            ).pack(anchor="w", padx=32, pady=(1, 1))
+        divider()
+
+        # ── Footer ───────────────────────────────────────────────────────
+        ttk.Label(
+            inner,
+            text="SUTD-EPD Digital Systems Laboratory  ·  Gavin Tan  ·  2026",
+            font=("Segoe UI", 8, "italic"),
+            foreground=FG_DIM, background=BG,
+        ).pack(anchor="w", padx=16, pady=(4, 12))
+
     # ------------------------------------------------------------------
     # Simulator controls
     # ------------------------------------------------------------------
@@ -883,6 +1200,43 @@ class SpectrogramApp:
         self.sim.waveform = self.wave_var.get()
         self.sim.enabled = self.sim_enable_var.get()
         self._bg_sim = None  # invalidate blit cache
+
+    def _toggle_sim_enable(self):
+        new_val = not self.sim_enable_var.get()
+        self.sim_enable_var.set(new_val)
+        self.sim.enabled = new_val
+        self._sim_toggle_btn.config(
+            text="ON" if new_val else "OFF",
+            style="ToggleOn.TButton" if new_val else "ToggleOff.TButton",
+        )
+        self._bg_sim = None
+
+    def _toggle_sim_noise(self):
+        new_val = not self.sim_noise_var.get()
+        self.sim_noise_var.set(new_val)
+        self.sim.noise_enabled = new_val
+        self._noise_toggle_btn.config(
+            text="Noise: ON" if new_val else "Noise: OFF",
+            style="NoiseOn.TButton" if new_val else "ToggleOff.TButton",
+        )
+        self._bg_sim = None
+
+    def _on_noise_amp_slider(self, val):
+        amp = float(val)
+        self.sim.noise_amplitude = amp
+        self.noise_amp_entry.delete(0, tk.END)
+        self.noise_amp_entry.insert(0, f"{amp:.2f}")
+        self._bg_sim = None
+
+    def _on_noise_amp_entry(self, _event=None):
+        try:
+            amp = float(self.noise_amp_entry.get())
+            amp = max(0.0, min(1.0, amp))
+        except ValueError:
+            return
+        self.sim.noise_amplitude = amp
+        self.noise_amp_var.set(amp)
+        self._bg_sim = None
 
     def _on_freq_slider(self, val):
         freq = float(val)
