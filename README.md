@@ -85,6 +85,10 @@ INMP441 (I2S Mic, 46.875 kHz)
 - **Display:** ESP32 + TFT with LVGL UI
 - **Clock domains:** 12 MHz system, 100 MHz CNN (via MMCM)
 
+### System Block Diagram
+
+![High-level Architecture](Pictures%20and%20Docs/High-level%20Architecture%20Simplified.png)
+
 ### Key Result
 
 End-to-end pipeline — audio capture → FFT → spectrogram → CNN inference → anomaly classification — running fully on-FPGA with **~20 sweeps/second** throughput and **1.8 ms** CNN inference latency.
@@ -131,6 +135,10 @@ Digital audio captured via I2S from INMP441 at 46.875 kHz, 24-bit.
 - Receives UART packets
 - Updates LVGL-based UI: system state (NORMAL/ABNORMAL), RMS bar, spectral indicators
 
+| Main Status Screen | Spectrogram View |
+|---|---|
+| ![ESP32 Telemetry Display](Pictures%20and%20Docs/ESP32%20Telemetry.jpg) | ![ESP32 Spectrogram Display](Pictures%20and%20Docs/ESP32%20Spectrogram.jpg) |
+
 ### 6. Cloud Telemetry Upload (ESP32 Wi-Fi)
 - ESP32 runs a non-blocking uploader task pinned to **Core 0** (radio core) so TLS/HTTP cannot stall UI/UART on Core 1
 - Telemetry snapshots are queued and uploaded to Supabase via HTTPS REST endpoint:
@@ -147,6 +155,16 @@ Digital audio captured via I2S from INMP441 at 46.875 kHz, 24-bit.
   - Anomaly rate and packet counters
   - Raw telemetry feed (`rms`, `result`, `seq`, `metric`, `flags`, `cnn_ran`, `fpga_active`)
 - Dashboard app path: `Display_codes/Audio Failure Analyzer Dashboard/`
+
+**Desktop Dashboard**
+
+![Web App Desktop](Pictures%20and%20Docs/Web%20App%20Desktop.png)
+
+**Mobile View**
+
+| Overview | Telemetry Feed |
+|---|---|
+| ![Web App Mobile 1](Pictures%20and%20Docs/Web%20App%201.jpg) | ![Web App Mobile 2](Pictures%20and%20Docs/Web%20App%202.jpg) |
 
 ---
 
@@ -271,6 +289,7 @@ Open `http://localhost:3000` to view live telemetry.
 | [Display_codes/src/example_wifi_config.h](Display_codes/src/example_wifi_config.h) | Wi-Fi + Supabase setup template (table schema, RLS, credentials) |
 | [Display_codes/Audio Failure Analyzer Dashboard](Display_codes/Audio Failure Analyzer Dashboard) | Next.js + Supabase realtime monitoring dashboard |
 | [testbench/README.md](testbench/README.md) | Simulation and testbench guide |
+| [Pictures and Docs/Audio Failure Analyzer Schematic.pdf](Pictures%20and%20Docs/Audio%20Failure%20Analyzer%20Schematic.pdf) | Full hardware schematic (FPGA, ESP32, mic, display wiring) |
 
 ---
 
@@ -296,7 +315,7 @@ Open `http://localhost:3000` to view live telemetry.
 - Power signoff workflow not yet run
 
 ### Contributors
-- Gavin Tan from SUTD-EPD Class of 2027
-- Eric Aleong from University of Waterloo Mechatronics
+- Gavin Tan from Singapore University of Technology and Design, Electrical Engineering (Product Development)
+- Eric Aleong from University of Waterloo, Mechatronics Engineering
 
 ---

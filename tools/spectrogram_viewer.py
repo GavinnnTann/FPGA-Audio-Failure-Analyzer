@@ -18,6 +18,7 @@ Usage:
   Select port and baud rate from the GUI, then click Connect.
 """
 
+import os
 import threading
 import time
 from collections import deque
@@ -443,6 +444,11 @@ class SpectrogramApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.minsize(1600, 900)
         self.root.configure(bg="#2b2b2b")
+        try:
+            _ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Audio Failure Analyzer Logo.ico")
+            self.root.iconbitmap(_ico)
+        except Exception:
+            pass
         self._apply_dark_titlebar()
         # Open maximized by default for lab use (cross-platform fallback).
         try:

@@ -3,6 +3,9 @@ import './globals.css';
 export const metadata = {
   title: 'Audio Failure Analyzer',
   description: 'Real-time telemetry for ESP32 acoustic anomaly detection',
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({ children }) {
