@@ -291,6 +291,7 @@ Open `http://localhost:3000` to view live telemetry.
 | [testbench/README.md](testbench/README.md) | Simulation and testbench guide |
 | [Pictures and Docs/Audio Failure Analyzer Schematic.pdf](Pictures%20and%20Docs/Audio%20Failure%20Analyzer%20Schematic.pdf) | Full hardware schematic (FPGA, ESP32, mic, display wiring) |
 
+*Note, autoencoder development and testing was done in a separate repository: https://github.com/ericraze16/fpga-audio-autoencoder/tree/main*
 ---
 
 ## Status
