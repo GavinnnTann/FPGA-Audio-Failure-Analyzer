@@ -31,13 +31,11 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_style_radius(ui_Panel1, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(ui_Panel1, 0, LV_PART_MAIN);
 
-    /* CNN image — centred on screen. Format: NATIVE_WITH_ALPHA (transparent background).
-       White recolor applied so image content renders white on the dark background. */
+    /* Logo image — centred on panel; 583×356 is larger than 480×320 so it clips
+       to fill the screen background. */
     lv_obj_t * cnn_img_obj = lv_image_create(ui_Panel1);
     lv_image_set_src(cnn_img_obj, &cnn_image);
     lv_obj_align(cnn_img_obj, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_set_style_image_recolor(cnn_img_obj, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_image_recolor_opa(cnn_img_obj, LV_OPA_COVER, LV_PART_MAIN);
 }
 
 void ui_Screen1_screen_destroy(void)
