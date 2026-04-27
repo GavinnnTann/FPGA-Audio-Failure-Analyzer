@@ -7,7 +7,10 @@ param(
     [string]$Action = 'build',
     
     [Parameter(Mandatory=$false)]
-    [string]$VivadoPath = "C:\Xilinx\Vivado\2023.1\bin\vivado.bat"
+    [string]$VivadoPath = "C:\Xilinx\Vivado\2023.1\bin\vivado.bat",
+
+    [Parameter(Mandatory=$false)]
+    [string]$Testbench = ""  # Optional: name of single testbench to simulate (e.g. uart_tx_tb)
 )
 
 # Color output functions
@@ -120,10 +123,14 @@ switch ($Action) {
     
     'simulate' {
         Write-Info "=== Running Simulation ==="
-        Invoke-Vivado -TclScript $simulateTcl
+        if ($Testbench -ne "") {
+            Write-Info "Testbench: $Testbench"
+            & $VivadoPath -mode batch -source $simulateTcl -tclargs $Testbench
+        } else {
+            Invoke-Vivado -TclScript $simulateTcl
+        }
         Write-Success "Simulation completed!"
-        Write-Info "Waveform data saved in build/sim directory"
-        Write-Info "Open Vivado GUI to view waveforms interactively"
+        Write-Info "Simulation artefacts saved to build/sim/"
     }
 }
 

@@ -1,0 +1,819 @@
+#! /c/Source/iverilog-install/bin/vvp
+:ivl_version "12.0 (devel)" "(s20150603-1539-g2693dd32b)";
+:ivl_delay_selection "TYPICAL";
+:vpi_time_precision - 12;
+:vpi_module "C:\iverilog\lib\ivl\system.vpi";
+:vpi_module "C:\iverilog\lib\ivl\vhdl_sys.vpi";
+:vpi_module "C:\iverilog\lib\ivl\vhdl_textio.vpi";
+:vpi_module "C:\iverilog\lib\ivl\v2005_math.vpi";
+:vpi_module "C:\iverilog\lib\ivl\va_math.vpi";
+S_0000022abaa05540 .scope module, "fft_magnitude_tb" "fft_magnitude_tb" 2 17;
+ .timescale -9 -12;
+P_0000022abaa0b9f0 .param/l "CLK_PERIOD" 1 2 19, +C4<00000000000000000000000000001010>;
+v0000022abaa72cc0_0 .var "clk", 0 0;
+v0000022abaa731c0_0 .var/i "errors", 31 0;
+v0000022abaa73300_0 .var "fft_bin_index", 9 0;
+v0000022abaa73800_0 .var "fft_tdata", 79 0;
+v0000022abaa738a0_0 .var "fft_tvalid", 0 0;
+v0000022abaa73940_0 .net "magnitude", 15 0, v0000022abaa72a40_0;  1 drivers
+v0000022abaa75450_0 .net "magnitude_valid", 0 0, v0000022abaa724a0_0;  1 drivers
+v0000022abaa74410_0 .var "rst_n", 0 0;
+v0000022abaa73f10_0 .net "spec_bin_index", 5 0, v0000022abaa722c0_0;  1 drivers
+v0000022abaa75590_0 .var/i "tests", 31 0;
+S_0000022abaa11af0 .scope task, "drive_check" "drive_check" 2 84, 2 84 0, S_0000022abaa05540;
+ .timescale -9 -12;
+v0000022aba9d28b0_0 .var "bin", 9 0;
+v0000022aba9d2950_0 .var "expect_bin_idx", 5 0;
+v0000022aba9d3170_0 .var "expect_mag", 15 0;
+v0000022aba9d3210_0 .var "expect_valid", 0 0;
+v0000022aba9d32b0_0 .var "imag_in", 33 0;
+v0000022aba9d2c70_0 .var "label", 127 0;
+v0000022aba9d33f0_0 .var "real_in", 33 0;
+E_0000022abaa0ccf0 .event negedge, v0000022abaa72360_0;
+E_0000022abaa0d370 .event posedge, v0000022abaa72360_0;
+TD_fft_magnitude_tb.drive_check ;
+    %wait E_0000022abaa0ccf0;
+    %load/vec4 v0000022aba9d33f0_0;
+    %load/vec4 v0000022aba9d32b0_0;
+    %store/vec4 v0000022abaa739e0_0, 0, 34;
+    %store/vec4 v0000022abaa72fe0_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.pack_iq, S_0000022abaa14fa0;
+    %store/vec4 v0000022abaa73800_0, 0, 80;
+    %load/vec4 v0000022aba9d28b0_0;
+    %store/vec4 v0000022abaa73300_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022abaa738a0_0, 0, 1;
+    %wait E_0000022abaa0d370;
+    %delay 1000, 0;
+    %load/vec4 v0000022abaa75590_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa75590_0, 0, 32;
+    %load/vec4 v0000022abaa75450_0;
+    %load/vec4 v0000022aba9d3210_0;
+    %cmp/ne;
+    %jmp/0xz  T_0.0, 6;
+    %vpi_call 2 102 "$display", "FAIL  %s bin=%0d: magnitude_valid=%b expected=%b", v0000022aba9d2c70_0, v0000022aba9d28b0_0, v0000022abaa75450_0, v0000022aba9d3210_0 {0 0 0};
+    %load/vec4 v0000022abaa731c0_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa731c0_0, 0, 32;
+    %jmp T_0.1;
+T_0.0 ;
+    %load/vec4 v0000022aba9d3210_0;
+    %flag_set/vec4 9;
+    %flag_get/vec4 9;
+    %jmp/0 T_0.4, 9;
+    %load/vec4 v0000022abaa73940_0;
+    %load/vec4 v0000022aba9d3170_0;
+    %cmp/ne;
+    %flag_get/vec4 6;
+    %and;
+T_0.4;
+    %flag_set/vec4 8;
+    %jmp/0xz  T_0.2, 8;
+    %vpi_call 2 106 "$display", "FAIL  %s bin=%0d: mag=%0d expected=%0d", v0000022aba9d2c70_0, v0000022aba9d28b0_0, v0000022abaa73940_0, v0000022aba9d3170_0 {0 0 0};
+    %load/vec4 v0000022abaa731c0_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa731c0_0, 0, 32;
+    %jmp T_0.3;
+T_0.2 ;
+    %load/vec4 v0000022aba9d3210_0;
+    %flag_set/vec4 9;
+    %flag_get/vec4 9;
+    %jmp/0 T_0.7, 9;
+    %load/vec4 v0000022abaa73f10_0;
+    %load/vec4 v0000022aba9d2950_0;
+    %cmp/ne;
+    %flag_get/vec4 6;
+    %and;
+T_0.7;
+    %flag_set/vec4 8;
+    %jmp/0xz  T_0.5, 8;
+    %vpi_call 2 110 "$display", "FAIL  %s bin=%0d: spec_bin=%0d expected=%0d", v0000022aba9d2c70_0, v0000022aba9d28b0_0, v0000022abaa73f10_0, v0000022aba9d2950_0 {0 0 0};
+    %load/vec4 v0000022abaa731c0_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa731c0_0, 0, 32;
+    %jmp T_0.6;
+T_0.5 ;
+    %load/vec4 v0000022aba9d3210_0;
+    %flag_set/vec4 8;
+    %jmp/0xz  T_0.8, 8;
+    %vpi_call 2 115 "$display", "PASS  %s bin=%0d \342\206\222 mag=%0d spec_bin=%0d", v0000022aba9d2c70_0, v0000022aba9d28b0_0, v0000022abaa73940_0, v0000022abaa73f10_0 {0 0 0};
+    %jmp T_0.9;
+T_0.8 ;
+    %vpi_call 2 118 "$display", "PASS  %s bin=%0d \342\206\222 suppressed (no valid)", v0000022aba9d2c70_0, v0000022aba9d28b0_0 {0 0 0};
+T_0.9 ;
+T_0.6 ;
+T_0.3 ;
+T_0.1 ;
+    %wait E_0000022abaa0ccf0;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022abaa738a0_0, 0, 1;
+    %end;
+S_0000022abaa11c80 .scope module, "dut" "fft_magnitude" 2 32, 3 4 0, S_0000022abaa05540;
+ .timescale -9 -12;
+    .port_info 0 /INPUT 1 "clk";
+    .port_info 1 /INPUT 1 "rst_n";
+    .port_info 2 /INPUT 80 "fft_tdata";
+    .port_info 3 /INPUT 1 "fft_tvalid";
+    .port_info 4 /INPUT 10 "fft_bin_index";
+    .port_info 5 /OUTPUT 16 "magnitude";
+    .port_info 6 /OUTPUT 1 "magnitude_valid";
+    .port_info 7 /OUTPUT 6 "spec_bin_index";
+L_0000022abaa12760 .functor AND 1, L_0000022abaa749b0, L_0000022abaa75b30, C4<1>, C4<1>;
+v0000022aba9d24f0_0 .net *"_ivl_13", 0 0, L_0000022abaa74af0;  1 drivers
+L_0000022abaa900d0 .functor BUFT 1, C4<0000000000000000000000000000000000>, C4<0>, C4<0>, C4<0>;
+v0000022aba9d2590_0 .net *"_ivl_14", 33 0, L_0000022abaa900d0;  1 drivers
+v0000022aba9d29f0_0 .net *"_ivl_17", 33 0, L_0000022abaa74910;  1 drivers
+v0000022aba9d2a90_0 .net *"_ivl_20", 0 0, L_0000022abaa73fb0;  1 drivers
+v0000022aba9d2630_0 .net *"_ivl_24", 0 0, L_0000022abaa74050;  1 drivers
+v0000022aba9d2b30_0 .net *"_ivl_29", 25 0, L_0000022abaa751d0;  1 drivers
+L_0000022abaa90118 .functor BUFT 1, C4<00000000001111010111000010>, C4<0>, C4<0>, C4<0>;
+v0000022abaa736c0_0 .net/2u *"_ivl_30", 25 0, L_0000022abaa90118;  1 drivers
+v0000022abaa73260_0 .net *"_ivl_33", 25 0, L_0000022abaa74870;  1 drivers
+v0000022abaa72860_0 .net *"_ivl_35", 25 0, L_0000022abaa758b0;  1 drivers
+L_0000022abaa90160 .functor BUFT 1, C4<00000000000110010111100100>, C4<0>, C4<0>, C4<0>;
+v0000022abaa71f00_0 .net/2u *"_ivl_36", 25 0, L_0000022abaa90160;  1 drivers
+v0000022abaa734e0_0 .net *"_ivl_39", 25 0, L_0000022abaa756d0;  1 drivers
+v0000022abaa729a0_0 .net *"_ivl_40", 25 0, L_0000022abaa745f0;  1 drivers
+v0000022abaa72540_0 .net *"_ivl_44", 9 0, L_0000022abaa75d10;  1 drivers
+L_0000022abaa901a8 .functor BUFT 1, C4<0000000000000000>, C4<0>, C4<0>, C4<0>;
+v0000022abaa720e0_0 .net *"_ivl_46", 15 0, L_0000022abaa901a8;  1 drivers
+L_0000022abaa901f0 .functor BUFT 1, C4<0100000000>, C4<0>, C4<0>, C4<0>;
+v0000022abaa72e00_0 .net/2u *"_ivl_48", 9 0, L_0000022abaa901f0;  1 drivers
+v0000022abaa71e60_0 .net *"_ivl_5", 0 0, L_0000022abaa74370;  1 drivers
+v0000022abaa73bc0_0 .net *"_ivl_50", 0 0, L_0000022abaa749b0;  1 drivers
+v0000022abaa73440_0 .net *"_ivl_53", 1 0, L_0000022abaa744b0;  1 drivers
+L_0000022abaa90238 .functor BUFT 1, C4<00>, C4<0>, C4<0>, C4<0>;
+v0000022abaa73d00_0 .net/2u *"_ivl_54", 1 0, L_0000022abaa90238;  1 drivers
+v0000022abaa73580_0 .net *"_ivl_56", 0 0, L_0000022abaa75b30;  1 drivers
+L_0000022abaa90088 .functor BUFT 1, C4<0000000000000000000000000000000000>, C4<0>, C4<0>, C4<0>;
+v0000022abaa71fa0_0 .net *"_ivl_6", 33 0, L_0000022abaa90088;  1 drivers
+v0000022abaa73c60_0 .net *"_ivl_9", 33 0, L_0000022abaa75a90;  1 drivers
+v0000022abaa733a0_0 .net/s "abs_imag", 33 0, L_0000022abaa74730;  1 drivers
+v0000022abaa72680_0 .net/s "abs_real", 33 0, L_0000022abaa75bd0;  1 drivers
+v0000022abaa72d60_0 .net "approx_mag", 25 0, L_0000022abaa740f0;  1 drivers
+v0000022abaa72360_0 .net "clk", 0 0, v0000022abaa72cc0_0;  1 drivers
+v0000022abaa72900_0 .net "downsampled_index", 5 0, L_0000022abaa74190;  1 drivers
+v0000022abaa72f40_0 .net "fft_bin_index", 9 0, v0000022abaa73300_0;  1 drivers
+v0000022abaa72040_0 .net "fft_tdata", 79 0, v0000022abaa73800_0;  1 drivers
+v0000022abaa725e0_0 .net "fft_tvalid", 0 0, v0000022abaa738a0_0;  1 drivers
+v0000022abaa72180_0 .net/s "imag_part", 33 0, L_0000022abaa75270;  1 drivers
+v0000022abaa72220_0 .net "is_downsampled_bin", 0 0, L_0000022abaa12760;  1 drivers
+v0000022abaa72a40_0 .var "magnitude", 15 0;
+v0000022abaa724a0_0 .var "magnitude_valid", 0 0;
+v0000022abaa73620_0 .net "max_val", 33 0, L_0000022abaa75c70;  1 drivers
+v0000022abaa73b20_0 .net "min_val", 33 0, L_0000022abaa74cd0;  1 drivers
+v0000022abaa72ea0_0 .net/s "real_part", 33 0, L_0000022abaa75810;  1 drivers
+v0000022abaa73760_0 .net "rst_n", 0 0, v0000022abaa74410_0;  1 drivers
+v0000022abaa722c0_0 .var "spec_bin_index", 5 0;
+E_0000022abaa0cd70/0 .event negedge, v0000022abaa73760_0;
+E_0000022abaa0cd70/1 .event posedge, v0000022abaa72360_0;
+E_0000022abaa0cd70 .event/or E_0000022abaa0cd70/0, E_0000022abaa0cd70/1;
+L_0000022abaa75810 .part v0000022abaa73800_0, 0, 34;
+L_0000022abaa75270 .part v0000022abaa73800_0, 40, 34;
+L_0000022abaa74370 .part L_0000022abaa75810, 33, 1;
+L_0000022abaa75a90 .arith/sub 34, L_0000022abaa90088, L_0000022abaa75810;
+L_0000022abaa75bd0 .functor MUXZ 34, L_0000022abaa75810, L_0000022abaa75a90, L_0000022abaa74370, C4<>;
+L_0000022abaa74af0 .part L_0000022abaa75270, 33, 1;
+L_0000022abaa74910 .arith/sub 34, L_0000022abaa900d0, L_0000022abaa75270;
+L_0000022abaa74730 .functor MUXZ 34, L_0000022abaa75270, L_0000022abaa74910, L_0000022abaa74af0, C4<>;
+L_0000022abaa73fb0 .cmp/gt.s 34, L_0000022abaa75bd0, L_0000022abaa74730;
+L_0000022abaa75c70 .functor MUXZ 34, L_0000022abaa74730, L_0000022abaa75bd0, L_0000022abaa73fb0, C4<>;
+L_0000022abaa74050 .cmp/gt.s 34, L_0000022abaa75bd0, L_0000022abaa74730;
+L_0000022abaa74cd0 .functor MUXZ 34, L_0000022abaa75bd0, L_0000022abaa74730, L_0000022abaa74050, C4<>;
+L_0000022abaa751d0 .part L_0000022abaa75c70, 8, 26;
+L_0000022abaa74870 .arith/mult 26, L_0000022abaa751d0, L_0000022abaa90118;
+L_0000022abaa758b0 .part L_0000022abaa74cd0, 8, 26;
+L_0000022abaa756d0 .arith/mult 26, L_0000022abaa758b0, L_0000022abaa90160;
+L_0000022abaa745f0 .arith/sum 26, L_0000022abaa74870, L_0000022abaa756d0;
+L_0000022abaa75d10 .part L_0000022abaa745f0, 16, 10;
+L_0000022abaa740f0 .concat [ 10 16 0 0], L_0000022abaa75d10, L_0000022abaa901a8;
+L_0000022abaa749b0 .cmp/gt 10, L_0000022abaa901f0, v0000022abaa73300_0;
+L_0000022abaa744b0 .part v0000022abaa73300_0, 0, 2;
+L_0000022abaa75b30 .cmp/eq 2, L_0000022abaa744b0, L_0000022abaa90238;
+L_0000022abaa74190 .part v0000022abaa73300_0, 2, 6;
+S_0000022abaa14fa0 .scope function.vec4.s80, "pack_iq" "pack_iq" 2 52, 2 52 0, S_0000022abaa05540;
+ .timescale -9 -12;
+; Variable pack_iq is vec4 return value of scope S_0000022abaa14fa0
+v0000022abaa739e0_0 .var/s "q", 33 0;
+v0000022abaa72fe0_0 .var/s "r", 33 0;
+TD_fft_magnitude_tb.pack_iq ;
+    %pushi/vec4 0, 0, 80;
+    %ret/vec4 0, 0, 80;  Assign to pack_iq (store_vec4_to_lval)
+    %load/vec4 v0000022abaa72fe0_0;
+    %ix/load 4, 0, 0;
+    %flag_set/imm 4, 0;
+    %ret/vec4 0, 4, 34; Assign to pack_iq (store_vec4_to_lval)
+    %load/vec4 v0000022abaa739e0_0;
+    %ix/load 4, 40, 0;
+    %flag_set/imm 4, 0;
+    %ret/vec4 0, 4, 34; Assign to pack_iq (store_vec4_to_lval)
+    %end;
+S_0000022abaa15130 .scope function.vec4.s16, "ref_mag" "ref_mag" 2 65, 2 65 0, S_0000022abaa05540;
+ .timescale -9 -12;
+v0000022abaa72ae0_0 .var "abs_q", 33 0;
+v0000022abaa72400_0 .var "abs_r", 33 0;
+v0000022abaa727c0_0 .var "approx", 25 0;
+v0000022abaa73a80_0 .var "mn", 33 0;
+v0000022abaa72b80_0 .var "mx", 33 0;
+; Variable ref_mag is vec4 return value of scope S_0000022abaa15130
+TD_fft_magnitude_tb.ref_mag ;
+    %load/vec4 v0000022abaa72ae0_0;
+    %load/vec4 v0000022abaa72400_0;
+    %cmp/u;
+    %flag_mov 8, 5;
+    %jmp/0 T_2.10, 8;
+    %load/vec4 v0000022abaa72400_0;
+    %jmp/1 T_2.11, 8;
+T_2.10 ; End of true expr.
+    %load/vec4 v0000022abaa72ae0_0;
+    %jmp/0 T_2.11, 8;
+ ; End of false expr.
+    %blend;
+T_2.11;
+    %store/vec4 v0000022abaa72b80_0, 0, 34;
+    %load/vec4 v0000022abaa72ae0_0;
+    %load/vec4 v0000022abaa72400_0;
+    %cmp/u;
+    %flag_mov 8, 5;
+    %jmp/0 T_2.12, 8;
+    %load/vec4 v0000022abaa72ae0_0;
+    %jmp/1 T_2.13, 8;
+T_2.12 ; End of true expr.
+    %load/vec4 v0000022abaa72400_0;
+    %jmp/0 T_2.13, 8;
+ ; End of false expr.
+    %blend;
+T_2.13;
+    %store/vec4 v0000022abaa73a80_0, 0, 34;
+    %load/vec4 v0000022abaa72b80_0;
+    %parti/s 26, 8, 5;
+    %muli 62914, 0, 26;
+    %load/vec4 v0000022abaa73a80_0;
+    %parti/s 26, 8, 5;
+    %muli 26084, 0, 26;
+    %add;
+    %ix/load 4, 16, 0;
+    %flag_set/imm 4, 0;
+    %shiftr 4;
+    %store/vec4 v0000022abaa727c0_0, 0, 26;
+    %load/vec4 v0000022abaa727c0_0;
+    %cmpi/u 65535, 0, 26;
+    %flag_or 5, 4; GT is !LE
+    %flag_inv 5;
+    %jmp/0xz  T_2.14, 5;
+    %pushi/vec4 65535, 0, 16;
+    %ret/vec4 0, 0, 16;  Assign to ref_mag (store_vec4_to_lval)
+    %jmp T_2.15;
+T_2.14 ;
+    %load/vec4 v0000022abaa727c0_0;
+    %parti/s 16, 0, 2;
+    %ret/vec4 0, 0, 16;  Assign to ref_mag (store_vec4_to_lval)
+T_2.15 ;
+    %end;
+S_0000022abaa152c0 .scope begin, "t6" "t6" 2 182, 2 182 0, S_0000022abaa05540;
+ .timescale -9 -12;
+v0000022abaa72c20_0 .var/i "b", 31 0;
+v0000022abaa73120_0 .var/i "t6_errors", 31 0;
+    .scope S_0000022abaa11c80;
+T_3 ;
+    %wait E_0000022abaa0cd70;
+    %load/vec4 v0000022abaa73760_0;
+    %nor/r;
+    %flag_set/vec4 8;
+    %jmp/0xz  T_3.0, 8;
+    %pushi/vec4 0, 0, 16;
+    %assign/vec4 v0000022abaa72a40_0, 0;
+    %pushi/vec4 0, 0, 1;
+    %assign/vec4 v0000022abaa724a0_0, 0;
+    %pushi/vec4 0, 0, 6;
+    %assign/vec4 v0000022abaa722c0_0, 0;
+    %jmp T_3.1;
+T_3.0 ;
+    %pushi/vec4 0, 0, 1;
+    %assign/vec4 v0000022abaa724a0_0, 0;
+    %load/vec4 v0000022abaa725e0_0;
+    %flag_set/vec4 9;
+    %flag_get/vec4 9;
+    %jmp/0 T_3.4, 9;
+    %load/vec4 v0000022abaa72220_0;
+    %and;
+T_3.4;
+    %flag_set/vec4 8;
+    %jmp/0xz  T_3.2, 8;
+    %load/vec4 v0000022abaa72d60_0;
+    %cmpi/u 65535, 0, 26;
+    %flag_or 5, 4; GT is !LE
+    %flag_inv 5;
+    %jmp/0xz  T_3.5, 5;
+    %pushi/vec4 65535, 0, 16;
+    %assign/vec4 v0000022abaa72a40_0, 0;
+    %jmp T_3.6;
+T_3.5 ;
+    %load/vec4 v0000022abaa72d60_0;
+    %parti/s 16, 0, 2;
+    %assign/vec4 v0000022abaa72a40_0, 0;
+T_3.6 ;
+    %load/vec4 v0000022abaa72900_0;
+    %assign/vec4 v0000022abaa722c0_0, 0;
+    %pushi/vec4 1, 0, 1;
+    %assign/vec4 v0000022abaa724a0_0, 0;
+T_3.2 ;
+T_3.1 ;
+    %jmp T_3;
+    .thread T_3;
+    .scope S_0000022abaa05540;
+T_4 ;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022abaa72cc0_0, 0, 1;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022abaa74410_0, 0, 1;
+    %pushi/vec4 0, 0, 80;
+    %store/vec4 v0000022abaa73800_0, 0, 80;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022abaa738a0_0, 0, 1;
+    %pushi/vec4 0, 0, 10;
+    %store/vec4 v0000022abaa73300_0, 0, 10;
+    %pushi/vec4 0, 0, 32;
+    %store/vec4 v0000022abaa731c0_0, 0, 32;
+    %pushi/vec4 0, 0, 32;
+    %store/vec4 v0000022abaa75590_0, 0, 32;
+    %end;
+    .thread T_4;
+    .scope S_0000022abaa05540;
+T_5 ;
+    %delay 5000, 0;
+    %load/vec4 v0000022abaa72cc0_0;
+    %inv;
+    %store/vec4 v0000022abaa72cc0_0, 0, 1;
+    %jmp T_5;
+    .thread T_5;
+    .scope S_0000022abaa05540;
+T_6 ;
+    %vpi_call 2 131 "$dumpfile", "fft_magnitude_tb.vcd" {0 0 0};
+    %vpi_call 2 132 "$dumpvars", 32'sb00000000000000000000000000000000, S_0000022abaa05540 {0 0 0};
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022abaa74410_0, 0, 1;
+    %pushi/vec4 5, 0, 32;
+T_6.0 %dup/vec4;
+    %pushi/vec4 0, 0, 32;
+    %cmp/s;
+    %jmp/1xz T_6.1, 5;
+    %jmp/1 T_6.1, 4;
+    %pushi/vec4 1, 0, 32;
+    %sub;
+    %wait E_0000022abaa0d370;
+    %jmp T_6.0;
+T_6.1 ;
+    %pop/vec4 1;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022abaa74410_0, 0, 1;
+    %pushi/vec4 2, 0, 32;
+T_6.2 %dup/vec4;
+    %pushi/vec4 0, 0, 32;
+    %cmp/s;
+    %jmp/1xz T_6.3, 5;
+    %jmp/1 T_6.3, 4;
+    %pushi/vec4 1, 0, 32;
+    %sub;
+    %wait E_0000022abaa0d370;
+    %jmp T_6.2;
+T_6.3 ;
+    %pop/vec4 1;
+    %vpi_call 2 142 "$display", "\012--- TEST 1: Pure-real input, bin 0 ---" {0 0 0};
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 0, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 65536, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022abaa72ae0_0, 0, 34;
+    %store/vec4 v0000022abaa72400_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.ref_mag, S_0000022abaa15130;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 28789, 0, 32; draw_string_vec4
+    %pushi/vec4 1919246194, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1700883551, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1651076656, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 148 "$display", "\012--- TEST 2: Pure-imag input, bin 4 ---" {0 0 0};
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 4, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 34;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022abaa72ae0_0, 0, 34;
+    %store/vec4 v0000022abaa72400_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.ref_mag, S_0000022abaa15130;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 1, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 28789, 0, 32; draw_string_vec4
+    %pushi/vec4 1919246185, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1835099999, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1651076660, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 155 "$display", "\012--- TEST 3: Equal I/Q (45-degree angle), bin 8 ---" {0 0 0};
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 8, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 65536, 0, 34;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022abaa72ae0_0, 0, 34;
+    %store/vec4 v0000022abaa72400_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.ref_mag, S_0000022abaa15130;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 2, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 101, 0, 32; draw_string_vec4
+    %pushi/vec4 1903518060, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1600745823, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1651076664, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 161 "$display", "\012--- TEST 4: Downsampling \342\200\224 odd-indexed bins suppressed ---" {0 0 0};
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 1, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 25193, 0, 32; draw_string_vec4
+    %pushi/vec4 1851732319, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1937076336, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1919251315, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 2, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 25193, 0, 32; draw_string_vec4
+    %pushi/vec4 1851732575, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1937076336, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1919251315, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 3, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 25193, 0, 32; draw_string_vec4
+    %pushi/vec4 1851732831, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1937076336, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1919251315, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 5, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 25193, 0, 32; draw_string_vec4
+    %pushi/vec4 1851733343, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1937076336, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1919251315, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 168 "$display", "\012--- TEST 4b: Downsampled bins pass ---" {0 0 0};
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 12, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 65536, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022abaa72ae0_0, 0, 34;
+    %store/vec4 v0000022abaa72400_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.ref_mag, S_0000022abaa15130;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 3, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 25193, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1851732274, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 252, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 65536, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022abaa72ae0_0, 0, 34;
+    %store/vec4 v0000022abaa72400_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.ref_mag, S_0000022abaa15130;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 63, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 6449518, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1597125938, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 175 "$display", "\012--- TEST 5: Bins 256+ suppressed ---" {0 0 0};
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 256, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 6449518, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1597125942, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 260, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 6449518, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1597126192, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %pushi/vec4 65536, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 511, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 0, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 6449518, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1597321521, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 181 "$display", "\012--- TEST 6: spec_bin_index = fft_bin_index >> 2 ---" {0 0 0};
+    %fork t_1, S_0000022abaa152c0;
+    %jmp t_0;
+    .scope S_0000022abaa152c0;
+t_1 ;
+    %pushi/vec4 0, 0, 32;
+    %store/vec4 v0000022abaa73120_0, 0, 32;
+    %pushi/vec4 0, 0, 32;
+    %store/vec4 v0000022abaa72c20_0, 0, 32;
+T_6.4 ;
+    %load/vec4 v0000022abaa72c20_0;
+    %cmpi/s 256, 0, 32;
+    %jmp/0xz T_6.5, 5;
+    %wait E_0000022abaa0ccf0;
+    %pushi/vec4 4096, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022abaa739e0_0, 0, 34;
+    %store/vec4 v0000022abaa72fe0_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.pack_iq, S_0000022abaa14fa0;
+    %store/vec4 v0000022abaa73800_0, 0, 80;
+    %load/vec4 v0000022abaa72c20_0;
+    %parti/s 10, 0, 2;
+    %store/vec4 v0000022abaa73300_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022abaa738a0_0, 0, 1;
+    %wait E_0000022abaa0ccf0;
+    %pushi/vec4 0, 0, 1;
+    %store/vec4 v0000022abaa738a0_0, 0, 1;
+    %wait E_0000022abaa0d370;
+    %delay 1000, 0;
+    %load/vec4 v0000022abaa75450_0;
+    %nor/r;
+    %flag_set/vec4 8;
+    %jmp/1 T_6.8, 8;
+    %load/vec4 v0000022abaa73f10_0;
+    %load/vec4 v0000022abaa72c20_0;
+    %parti/s 6, 2, 3;
+    %cmp/ne;
+    %flag_or 8, 6;
+T_6.8;
+    %jmp/0xz  T_6.6, 8;
+    %load/vec4 v0000022abaa73120_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa73120_0, 0, 32;
+    %load/vec4 v0000022abaa73120_0;
+    %cmpi/s 5, 0, 32;
+    %jmp/0xz  T_6.9, 5;
+    %load/vec4 v0000022abaa72c20_0;
+    %pushi/vec4 4, 0, 32;
+    %div/s;
+    %vpi_call 2 197 "$display", "  FAIL bin=%0d: spec_bin=%0d expected=%0d", v0000022abaa72c20_0, v0000022abaa73f10_0, S<0,vec4,s32> {1 0 0};
+T_6.9 ;
+T_6.6 ;
+    %load/vec4 v0000022abaa72c20_0;
+    %addi 4, 0, 32;
+    %store/vec4 v0000022abaa72c20_0, 0, 32;
+    %jmp T_6.4;
+T_6.5 ;
+    %load/vec4 v0000022abaa75590_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa75590_0, 0, 32;
+    %load/vec4 v0000022abaa73120_0;
+    %cmpi/s 0, 0, 32;
+    %flag_or 5, 4; GT is !LE
+    %flag_inv 5;
+    %jmp/0xz  T_6.11, 5;
+    %vpi_call 2 203 "$display", "FAIL  TEST 6: %0d bin-index mapping errors", v0000022abaa73120_0 {0 0 0};
+    %load/vec4 v0000022abaa731c0_0;
+    %addi 1, 0, 32;
+    %store/vec4 v0000022abaa731c0_0, 0, 32;
+    %jmp T_6.12;
+T_6.11 ;
+    %vpi_call 2 206 "$display", "PASS  TEST 6: all 64 bin indices mapped correctly" {0 0 0};
+T_6.12 ;
+    %end;
+    .scope S_0000022abaa05540;
+t_0 %join;
+    %vpi_call 2 210 "$display", "\012--- TEST 7: Large magnitude saturates to 0xFFFF ---" {0 0 0};
+    %pushi/vec4 536870896, 0, 34;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 0, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 65535, 0, 16;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 29537, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1953854049, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1953066862, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 214 "$display", "\012--- TEST 8: Negative real input (sign extension) ---" {0 0 0};
+    %pushi/vec4 4294950912, 0, 32;
+    %concati/vec4 0, 0, 2;
+    %store/vec4 v0000022aba9d33f0_0, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022aba9d32b0_0, 0, 34;
+    %pushi/vec4 0, 0, 10;
+    %store/vec4 v0000022aba9d28b0_0, 0, 10;
+    %pushi/vec4 1, 0, 1;
+    %store/vec4 v0000022aba9d3210_0, 0, 1;
+    %pushi/vec4 65536, 0, 34;
+    %pushi/vec4 0, 0, 34;
+    %store/vec4 v0000022abaa72ae0_0, 0, 34;
+    %store/vec4 v0000022abaa72400_0, 0, 34;
+    %callf/vec4 TD_fft_magnitude_tb.ref_mag, S_0000022abaa15130;
+    %store/vec4 v0000022aba9d3170_0, 0, 16;
+    %pushi/vec4 0, 0, 6;
+    %store/vec4 v0000022aba9d2950_0, 0, 6;
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %pushi/vec4 0, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1852139359, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %pushi/vec4 1919246700, 0, 32; draw_string_vec4
+    %concat/vec4; draw_string_vec4
+    %store/vec4 v0000022aba9d2c70_0, 0, 128;
+    %fork TD_fft_magnitude_tb.drive_check, S_0000022abaa11af0;
+    %join;
+    %vpi_call 2 220 "$display", "\012========== fft_magnitude_tb COMPLETE ==========" {0 0 0};
+    %vpi_call 2 221 "$display", "Tests run: %0d  Errors: %0d", v0000022abaa75590_0, v0000022abaa731c0_0 {0 0 0};
+    %load/vec4 v0000022abaa731c0_0;
+    %cmpi/e 0, 0, 32;
+    %jmp/0xz  T_6.13, 4;
+    %vpi_call 2 222 "$display", "RESULT: PASS" {0 0 0};
+    %jmp T_6.14;
+T_6.13 ;
+    %vpi_call 2 223 "$display", "RESULT: FAIL" {0 0 0};
+T_6.14 ;
+    %vpi_call 2 224 "$finish" {0 0 0};
+    %end;
+    .thread T_6;
+# The file index is used to find the file name in the following table.
+:file_names 4;
+    "N/A";
+    "<interactive>";
+    "C:\Users\gavin\OneDrive\Desktop\SUTD\Term 6\Digital System Lab\DSL Project\testbench\fft_magnitude_tb.v";
+    "C:\Users\gavin\OneDrive\Desktop\SUTD\Term 6\Digital System Lab\DSL Project\src_main\fft_magnitude.v";
