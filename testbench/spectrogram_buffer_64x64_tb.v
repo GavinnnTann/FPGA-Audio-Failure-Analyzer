@@ -83,7 +83,7 @@ module spectrogram_buffer_64x64_tb;
     // Stimulus
     // ----------------------------------------------------------------
     initial begin
-        $dumpfile("spectrogram_buffer_64x64_tb.vcd");
+        $dumpfile("waveforms/spectrogram_buffer_64x64_tb.vcd");
         $dumpvars(0, spectrogram_buffer_64x64_tb);
 
         rst_n = 0;

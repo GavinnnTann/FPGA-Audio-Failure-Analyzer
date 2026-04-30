@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "failure_dots.h"
 #include "ui.h"
@@ -13,6 +14,11 @@ namespace screen2_telemetry {
 namespace {
 
 constexpr uint32_t kRuntimeOverlayUpdateMs = 500;
+// 30 Hz cap on bar widget redraws. The slew math runs every loop iteration
+// so the visual motion stays smooth, but we only push the value into LVGL
+// (which invalidates the bar) at most once per ~33 ms — that drops bar
+// redraws from ~250/s to ~30/s and frees Core 1 for input handling.
+constexpr uint32_t kBarUpdateMinMs = 33;
 constexpr uint16_t kRmsWindowSamples = 200;  // 10s at 50 ms frame rate
 constexpr uint16_t kAnomalyEventWindowMs = 60000;
 constexpr uint16_t kSparklineSamples = 72;
@@ -305,6 +311,9 @@ void initialize(uint32_t boot_ms) {
   create_center_sparkline();
   create_overlay_labels();
   failure_dots::initialize(ui_Screen2, ui_Arc1);
+  // The TabView slides over Screen2 and is the only widget that needs to
+  // win the z-order fight against newly-created failure dots.
+  failure_dots::set_overlay(ui_TabView2);
 }
 
 void set_stale_ui(bool stale) {
@@ -331,7 +340,7 @@ void update_smoothed_bar(uint32_t now_ms) {
   }
 
   const uint32_t dt_ms = now_ms - telemetry.last_bar_update_ms;
-  if (dt_ms == 0) {
+  if (dt_ms < kBarUpdateMinMs) {
     return;
   }
 
@@ -368,6 +377,15 @@ void tick(uint32_t now_ms) {
 
 void update_uptime_label(uint32_t now_ms, uint32_t boot_ms) {
   const uint32_t total_sec = (now_ms - boot_ms) / 1000U;
+
+  // The caller fires this every 200 ms but the displayed values only tick
+  // once per second. Skip the label / arc / dots work when nothing changed.
+  static uint32_t last_total_sec = UINT32_MAX;
+  if (total_sec == last_total_sec) {
+    return;
+  }
+  last_total_sec = total_sec;
+
   const uint32_t hh = total_sec / 3600U;
   const uint32_t mm = (total_sec % 3600U) / 60U;
   const uint32_t ss = total_sec % 60U;
@@ -403,6 +421,13 @@ void update_runtime_overlay(uint32_t now_ms, const RuntimeStats& stats) {
   const char* cnn_tag = cnn_ran ? (telemetry.metric >= 30U ? "ANOM" : "OK")
                                 : "--";
 
+  // Cache the formatted strings so we only invalidate the label widgets
+  // when the visible content actually changes. lv_label_set_text always
+  // marks the label dirty, so unconditional calls every 500 ms repaint
+  // the panel even when no values moved.
+  static char last_top[140] = {0};
+  static char last_bottom[140] = {0};
+
   char top[140];
   std::snprintf(
       top,
@@ -415,7 +440,11 @@ void update_runtime_overlay(uint32_t now_ms, const RuntimeStats& stats) {
       static_cast<unsigned>(telemetry.rms),
       static_cast<unsigned>(min_rms),
       static_cast<unsigned>(max_rms));
-  lv_label_set_text(severity_info_label, top);
+  if (std::strcmp(top, last_top) != 0) {
+    std::strncpy(last_top, top, sizeof(last_top));
+    last_top[sizeof(last_top) - 1] = '\0';
+    lv_label_set_text(severity_info_label, top);
+  }
 
   char bottom[140];
   std::snprintf(
@@ -429,7 +458,11 @@ void update_runtime_overlay(uint32_t now_ms, const RuntimeStats& stats) {
       static_cast<unsigned long>(stats.seq_drop),
       static_cast<unsigned long>(stats.checksum_fail),
       static_cast<unsigned long>(stats.seq_reorder));
-  lv_label_set_text(health_info_label, bottom);
+  if (std::strcmp(bottom, last_bottom) != 0) {
+    std::strncpy(last_bottom, bottom, sizeof(last_bottom));
+    last_bottom[sizeof(last_bottom) - 1] = '\0';
+    lv_label_set_text(health_info_label, bottom);
+  }
 
   // WiFi label — asymmetric debounce:
   //   Connecting  : show immediately so the user sees it as soon as it's up.

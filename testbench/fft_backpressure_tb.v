@@ -85,7 +85,7 @@ module fft_backpressure_tb;
     reg [15:0] phase = 0;
 
     initial begin
-        $dumpfile("fft_backpressure_tb.vcd");
+        $dumpfile("waveforms/fft_backpressure_tb.vcd");
         $dumpvars(0, fft_backpressure_tb);
 
         sample_in    = 0;

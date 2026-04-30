@@ -18,8 +18,10 @@ set root_dir    [file normalize "$script_dir/.."]
 set src_dir     [file normalize "$root_dir/src_main"]
 set tb_dir      [file normalize "$root_dir/testbench"]
 set sim_dir     [file normalize "$root_dir/build/sim"]
+set wave_dir    [file normalize "$root_dir/waveforms"]
 
 file mkdir $sim_dir
+file mkdir $wave_dir
 
 # Optional: filter to a single testbench if passed via -tclargs
 # e.g.  vivado -mode batch -source simulate.tcl -tclargs uart_tx_tb
@@ -100,6 +102,7 @@ foreach suite $SUITES {
     puts "--- $tb_top ---"
     set work_dir "$sim_dir/$tb_top"
     file mkdir $work_dir
+    file mkdir "$work_dir/waveforms"
 
     # Build source file list
     set src_files {}
@@ -136,6 +139,11 @@ foreach suite $SUITES {
 
     # ---- Simulate: xsim --runall --nolog so $display output goes to stdout ----
     set sim_out [xrun_in $work_dir xsim "${tb_top}_snap" --runall --nolog]
+
+    # Relocate any VCDs the testbench dumped into project waveforms/ dir
+    foreach vcd [glob -nocomplain "$work_dir/waveforms/*.vcd"] {
+        file rename -force $vcd "$wave_dir/[file tail $vcd]"
+    }
 
     # Parse PASS/FAIL from output
     set n_pass [regexp -all {PASS} $sim_out]

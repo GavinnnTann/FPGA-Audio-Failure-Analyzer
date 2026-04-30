@@ -21,6 +21,7 @@ FailureDot dots[kMaxFailureDots];
 uint16_t dot_next = 0;
 lv_obj_t* dot_screen = nullptr;
 lv_obj_t* dot_arc = nullptr;
+lv_obj_t* dot_overlay = nullptr;
 
 void get_arc_ring_geometry(int16_t* center_x, int16_t* center_y, int16_t* radius) {
   lv_area_t area;
@@ -56,6 +57,10 @@ void position_dot_for_second(lv_obj_t* dot, uint16_t sec_mod) {
 }
 
 }  // namespace
+
+void set_overlay(lv_obj_t* overlay) {
+  dot_overlay = overlay;
+}
 
 void initialize(lv_obj_t* screen, lv_obj_t* arc) {
   dot_screen = screen;
@@ -111,6 +116,16 @@ void add_dot(uint32_t total_sec, uint8_t severity) {
     lv_obj_set_style_border_width(dot.obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_radius(dot.obj, LV_RADIUS_CIRCLE, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_move_foreground(dot.obj);
+
+    // A freshly-created LVGL child lands at the top of the parent's
+    // z-order, which would punch through any overlay (e.g. an open
+    // TabView) that was already in front. Re-foreground the registered
+    // overlay so the dot stays underneath whatever the user is currently
+    // looking at.
+    if (dot_overlay != nullptr &&
+        !lv_obj_has_flag(dot_overlay, LV_OBJ_FLAG_HIDDEN)) {
+      lv_obj_move_foreground(dot_overlay);
+    }
   }
 
   dot.rev = total_sec / 360U;

@@ -125,7 +125,7 @@ module fft_test;
     
     // Dump waveforms for inspection
     initial begin
-        $dumpfile("fft_test.vcd");
+        $dumpfile("waveforms/fft_test.vcd");
         $dumpvars(0, fft_test);
     end
 

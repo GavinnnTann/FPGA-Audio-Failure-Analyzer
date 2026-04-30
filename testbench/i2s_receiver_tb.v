@@ -102,7 +102,7 @@ module i2s_receiver_tb;
     // Stimulus
     // ----------------------------------------------------------------
     initial begin
-        $dumpfile("i2s_receiver_tb.vcd");
+        $dumpfile("waveforms/i2s_receiver_tb.vcd");
         $dumpvars(0, i2s_receiver_tb);
 
         i2s_sd = 0;

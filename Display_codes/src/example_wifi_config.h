@@ -39,10 +39,10 @@
 
 // ---- Supabase project -------------------------------------------------------
 // e.g. "https://abcdefghijkl.supabase.co"  (no trailing slash)
-#define SUPABASE_HOST   "https://XXXXXXXXXXXXXXXXXXXX.supabase.co"
+#define SUPABASE_HOST   "https://abcdefghijkl.supabase.co"
 
 // anon/publishable key from Settings → API → Project API keys
-#define SUPABASE_KEY    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.PLACEHOLDER"
+#define SUPABASE_KEY    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.PLACEHOLDER "
 
 // Table name created above
 #define SUPABASE_TABLE  "telemetry"

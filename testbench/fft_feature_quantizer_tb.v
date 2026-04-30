@@ -114,7 +114,7 @@ module fft_feature_quantizer_tb;
     reg [7:0] cur_feat;
 
     initial begin
-        $dumpfile("fft_feature_quantizer_tb.vcd");
+        $dumpfile("waveforms/fft_feature_quantizer_tb.vcd");
         $dumpvars(0, fft_feature_quantizer_tb);
 
         rst_n = 0;

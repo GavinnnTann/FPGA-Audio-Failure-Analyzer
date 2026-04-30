@@ -29,7 +29,7 @@ module fft_test_simple;
     
     // Stimulus
     initial begin
-        $dumpfile("fft_test_simple.vcd");
+        $dumpfile("waveforms/fft_test_simple.vcd");
         $dumpvars(0, fft_test_simple);
         
         rst_n = 0;

@@ -35,7 +35,7 @@ void ui_event_Label3(lv_event_t * e);
 lv_obj_t * ui_Label3;
 lv_obj_t * ui_Label4;
 lv_obj_t * ui_Checkbox1;
-lv_obj_t * ui_TabView2;
+/* ui_TabView2 is owned by ui_Screen2.c (non-static); declared extern in ui.h. */
 lv_obj_t * ui_TabPage1;
 lv_obj_t * ui_TabPage2;
 lv_obj_t * ui_TabPage3;

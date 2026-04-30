@@ -49,6 +49,7 @@ extern lv_obj_t * ui_Bar1;
 extern lv_obj_t * ui_StatusLabel;
 extern lv_obj_t * ui_UptimeLabel;
 extern lv_obj_t * ui_FpgaStateLabel;
+extern lv_obj_t * ui_TabView2;
 void ui_append_uart0_monitor_line(const char * text);
 void ui_append_uart2_monitor_line(const char * text);
 void ui_set_uart2_monitor_text(const char * text);

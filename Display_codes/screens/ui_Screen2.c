@@ -4,7 +4,9 @@
 // Project name: Audio Anomaly Monitor
 
 #include "../ui.h"
+#include "../src/settings.h"
 #include <string.h>
+#include <stdio.h>
 
 lv_obj_t * ui_Screen2 = NULL;
 lv_obj_t * ui_Panel2 = NULL;
@@ -16,7 +18,7 @@ lv_obj_t * ui_StatusLabel = NULL;
 lv_obj_t * ui_UptimeLabel = NULL;
 lv_obj_t * ui_FpgaStateLabel = NULL;
 lv_obj_t * ui_WifiLabel = NULL;
-static lv_obj_t * ui_TabView2 = NULL;
+lv_obj_t * ui_TabView2 = NULL;
 static lv_obj_t * ui_TabPage1 = NULL;
 static lv_obj_t * ui_TabPage2 = NULL;
 static lv_obj_t * ui_TabPage3 = NULL;
@@ -24,6 +26,36 @@ static lv_obj_t * ui_TabPage4 = NULL;
 static lv_obj_t * ui_PanelTelemetry = NULL;
 static lv_obj_t * ui_TextAreaRawData1 = NULL;
 static lv_obj_t * ui_TextAreaRawData2 = NULL;
+static lv_obj_t * ui_TextAreaAbout = NULL;
+
+/* ---- Settings-tab widget handles (file-scope so callbacks can update UI) -- */
+static lv_obj_t * g_brightness_value_label = NULL;
+static lv_obj_t * g_wifi_ssid_label = NULL;
+
+/* ---- WiFi configuration modal -------------------------------------------- *
+ * Hidden by default. "Configure" raises it to the foreground; Save / Cancel
+ * hide it again. The modal is a child of ui_Screen2 (peer of ui_TabView2)
+ * so it sits above the open tabview when shown.                             */
+static lv_obj_t * g_wifi_modal       = NULL;
+static lv_obj_t * g_wifi_ssid_input  = NULL;
+static lv_obj_t * g_wifi_pass_input  = NULL;
+static lv_obj_t * g_wifi_keyboard    = NULL;
+
+static void refresh_wifi_label(void);
+static void show_wifi_modal(void);
+static void hide_wifi_modal(void);
+
+static void vibration_switch_cb(lv_event_t * e);
+static void wifi_upload_switch_cb(lv_event_t * e);
+static void brightness_slider_cb(lv_event_t * e);
+static void wifi_configure_btn_cb(lv_event_t * e);
+static void wifi_forget_btn_cb(lv_event_t * e);
+static void wifi_save_btn_cb(lv_event_t * e);
+static void wifi_cancel_btn_cb(lv_event_t * e);
+static void wifi_ta_focused_cb(lv_event_t * e);
+
+static void populate_settings_tab(lv_obj_t * page);
+static void create_wifi_modal(lv_obj_t * parent);
 
 static void ui_append_textarea_line(lv_obj_t * ta, const char * text)
 {
@@ -126,12 +158,24 @@ void ui_Screen2_screen_init(void)
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(lv_tabview_get_tab_bar(ui_TabView2), 255,  LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_TabPage1 = lv_tabview_add_tab(ui_TabView2, "Setting");
-    ui_TabPage2 = lv_tabview_add_tab(ui_TabView2, "Raw Data 1");
-    ui_TabPage3 = lv_tabview_add_tab(ui_TabView2, "Raw Data 2");
-    ui_TabPage4 = lv_tabview_add_tab(ui_TabView2, "About");
+    /* Disable swipe-based tab navigation to allow scrolling within tab content. */
+    lv_obj_clear_flag(lv_tabview_get_content(ui_TabView2), LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(lv_tabview_get_content(ui_TabView2), LV_OBJ_FLAG_SCROLL_CHAIN_VER);
 
-    ui_TextAreaRawData1 = lv_textarea_create(ui_TabPage2);
+    ui_TabPage1 = lv_tabview_add_tab(ui_TabView2, "About");
+    ui_TabPage2 = lv_tabview_add_tab(ui_TabView2, "Setting");
+    ui_TabPage3 = lv_tabview_add_tab(ui_TabView2, "Raw Data 1");
+    ui_TabPage4 = lv_tabview_add_tab(ui_TabView2, "Raw Data 2");
+
+    /* Enable scrolling on tab pages to allow scrollable content within. */
+    lv_obj_add_flag(ui_TabPage1, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ui_TabPage2, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ui_TabPage3, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ui_TabPage4, LV_OBJ_FLAG_SCROLLABLE);
+
+    populate_settings_tab(ui_TabPage2);
+
+    ui_TextAreaRawData1 = lv_textarea_create(ui_TabPage3);
     lv_obj_set_width(ui_TextAreaRawData1, lv_pct(100));
     lv_obj_set_height(ui_TextAreaRawData1, lv_pct(100));
     lv_obj_set_align(ui_TextAreaRawData1, LV_ALIGN_CENTER);
@@ -140,7 +184,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_remove_flag(ui_TextAreaRawData1, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_text_font(ui_TextAreaRawData1, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
-    ui_TextAreaRawData2 = lv_textarea_create(ui_TabPage3);
+    ui_TextAreaRawData2 = lv_textarea_create(ui_TabPage4);
     lv_obj_set_width(ui_TextAreaRawData2, lv_pct(100));
     lv_obj_set_height(ui_TextAreaRawData2, lv_pct(100));
     lv_obj_set_align(ui_TextAreaRawData2, LV_ALIGN_CENTER);
@@ -148,6 +192,24 @@ void ui_Screen2_screen_init(void)
     lv_textarea_set_one_line(ui_TextAreaRawData2, false);
     lv_obj_remove_flag(ui_TextAreaRawData2, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_style_text_font(ui_TextAreaRawData2, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    ui_TextAreaAbout = lv_textarea_create(ui_TabPage1);
+    lv_obj_set_width(ui_TextAreaAbout, lv_pct(100));
+    lv_obj_set_height(ui_TextAreaAbout, lv_pct(100));
+    lv_obj_set_align(ui_TextAreaAbout, LV_ALIGN_CENTER);
+    lv_textarea_set_one_line(ui_TextAreaAbout, false);
+    lv_obj_remove_flag(ui_TextAreaAbout, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(ui_TextAreaAbout, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_text_font(ui_TextAreaAbout, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_textarea_set_text(ui_TextAreaAbout,
+        "PROJECT OVERVIEW\n"
+        "This project is part of the Singapore University of Technology and Design (SUTD) Term 6 Digital Signals Lab 2026. The course is conducted and supervised by Prof. Teo Tee Hui.\n\n"
+        "PROJECT OBJECTIVE\n"
+        "Develop a low-cost, real-time acoustic monitoring system that detects anomalies using sound instead of vision, with all signal processing and inference running on a single low-cost FPGA.\n\n"
+        "CONTRIBUTORS\n"
+        "• Gavin Tan - Singapore University of Technology and Design, Electrical Engineering (Product Development)\n"
+        "• Eric Aleong - University of Waterloo, Mechatronics Engineering");
+
 
     // Arc zone (left): uptime ring + anomaly dots rendered in runtime code.
     ui_Arc1 = lv_arc_create(ui_Screen2);
@@ -167,6 +229,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_style_pad_top(ui_Arc1, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_bottom(ui_Arc1, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_remove_flag(ui_Arc1, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_CLICK_FOCUSABLE);
+
 
     // Telemetry zone (right): status + RMS bar + runtime metrics.
     ui_PanelTelemetry = lv_obj_create(ui_Screen2);
@@ -247,6 +310,13 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_style_text_font(ui_WifiLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_Button1, ui_event_Button1_tabview_toggle, LV_EVENT_ALL, NULL);
+
+    /* The WiFi configuration modal is a peer of ui_TabView2 so it can sit
+     * above the open tabview when summoned by the Configure button.       */
+    create_wifi_modal(ui_Screen2);
+
+    /* Move tabview to foreground after all objects are created so it stays above failure dots. */
+    lv_obj_move_foreground(ui_TabView2);
 }
 
 void ui_Screen2_screen_destroy(void)
@@ -272,4 +342,334 @@ void ui_Screen2_screen_destroy(void)
     ui_PanelTelemetry = NULL;
     ui_TextAreaRawData1 = NULL;
     ui_TextAreaRawData2 = NULL;
+    ui_TextAreaAbout = NULL;
+    g_brightness_value_label = NULL;
+    g_wifi_ssid_label = NULL;
+    g_wifi_modal = NULL;
+    g_wifi_ssid_input = NULL;
+    g_wifi_pass_input = NULL;
+    g_wifi_keyboard = NULL;
+}
+
+/* =========================================================================
+ *  Settings tab + WiFi configuration modal
+ *  Each control reads/writes the settings_* C API so other modules don't
+ *  need to know about LVGL. Heavy widgets (keyboard) are created once at
+ *  init and only made visible when the user taps Configure — they cost
+ *  nothing while hidden.
+ * ========================================================================= */
+
+static lv_obj_t * make_settings_row(lv_obj_t * parent)
+{
+    lv_obj_t * row = lv_obj_create(parent);
+    lv_obj_set_size(row, lv_pct(100), 38);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                          LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_pad_all(row, 4, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    return row;
+}
+
+static void refresh_wifi_label(void)
+{
+    if (g_wifi_ssid_label == NULL) return;
+    char ssid[33] = {0};
+    if (settings_wifi_current_ssid(ssid, sizeof(ssid))) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "WiFi: %s", ssid);
+        lv_label_set_text(g_wifi_ssid_label, buf);
+        lv_obj_set_style_text_color(g_wifi_ssid_label, lv_color_hex(0xCAD1D8),
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+    } else {
+        lv_label_set_text(g_wifi_ssid_label, "WiFi: not configured");
+        lv_obj_set_style_text_color(g_wifi_ssid_label, lv_color_hex(0x8A8A8A),
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+}
+
+static void populate_settings_tab(lv_obj_t * page)
+{
+    lv_obj_set_flex_flow(page, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(page, 4, 0);
+    lv_obj_set_style_pad_all(page, 8, 0);
+
+    /* ---- Row: Vibration toggle -------------------------------------- */
+    {
+        lv_obj_t * row = make_settings_row(page);
+
+        lv_obj_t * lbl = lv_label_create(row);
+        lv_label_set_text(lbl, "Vibration");
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+
+        lv_obj_t * sw = lv_switch_create(row);
+        if (settings_vibration_enabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
+        lv_obj_add_event_cb(sw, vibration_switch_cb,
+                            LV_EVENT_VALUE_CHANGED, NULL);
+    }
+
+    /* ---- Row: WiFi upload pause ------------------------------------- */
+    {
+        lv_obj_t * row = make_settings_row(page);
+
+        lv_obj_t * lbl = lv_label_create(row);
+        lv_label_set_text(lbl, "WiFi Upload");
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+
+        lv_obj_t * sw = lv_switch_create(row);
+        if (settings_wifi_upload_enabled()) lv_obj_add_state(sw, LV_STATE_CHECKED);
+        lv_obj_add_event_cb(sw, wifi_upload_switch_cb,
+                            LV_EVENT_VALUE_CHANGED, NULL);
+    }
+
+    /* ---- Row: Brightness label + percentage ------------------------- */
+    {
+        lv_obj_t * row = make_settings_row(page);
+
+        lv_obj_t * lbl = lv_label_create(row);
+        lv_label_set_text(lbl, "Brightness");
+        lv_obj_set_style_text_font(lbl, &lv_font_montserrat_16, 0);
+
+        g_brightness_value_label = lv_label_create(row);
+        const uint8_t b = settings_brightness();
+        char pct[8];
+        snprintf(pct, sizeof(pct), "%d%%", (b * 100) / 255);
+        lv_label_set_text(g_brightness_value_label, pct);
+        lv_obj_set_style_text_color(g_brightness_value_label,
+                                    lv_color_hex(0x8FB3D2),
+                                    LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_font(g_brightness_value_label,
+                                   &lv_font_montserrat_16, 0);
+    }
+
+    /* ---- Row: Brightness slider, full width ------------------------- */
+    {
+        lv_obj_t * sld = lv_slider_create(page);
+        lv_obj_set_width(sld, lv_pct(100));
+        lv_slider_set_range(sld, 16, 255);
+        lv_slider_set_value(sld, settings_brightness(), LV_ANIM_OFF);
+        lv_obj_add_event_cb(sld, brightness_slider_cb,
+                            LV_EVENT_VALUE_CHANGED, NULL);
+    }
+
+    /* ---- Row: current WiFi SSID ------------------------------------ */
+    {
+        g_wifi_ssid_label = lv_label_create(page);
+        lv_obj_set_width(g_wifi_ssid_label, lv_pct(100));
+        lv_obj_set_style_text_font(g_wifi_ssid_label, &lv_font_montserrat_16, 0);
+        refresh_wifi_label();
+    }
+
+    /* ---- Row: WiFi action buttons ---------------------------------- */
+    {
+        lv_obj_t * row = make_settings_row(page);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
+                              LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+        lv_obj_t * btn_cfg = lv_button_create(row);
+        lv_obj_set_size(btn_cfg, 110, 32);
+        lv_obj_add_event_cb(btn_cfg, wifi_configure_btn_cb,
+                            LV_EVENT_CLICKED, NULL);
+        lv_obj_t * cfg_lbl = lv_label_create(btn_cfg);
+        lv_label_set_text(cfg_lbl, "Configure");
+        lv_obj_center(cfg_lbl);
+
+        lv_obj_t * btn_forget = lv_button_create(row);
+        lv_obj_set_size(btn_forget, 110, 32);
+        lv_obj_set_style_bg_color(btn_forget, lv_color_hex(0x6E2030),
+                                  LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_add_event_cb(btn_forget, wifi_forget_btn_cb,
+                            LV_EVENT_CLICKED, NULL);
+        lv_obj_t * forget_lbl = lv_label_create(btn_forget);
+        lv_label_set_text(forget_lbl, "Forget");
+        lv_obj_center(forget_lbl);
+    }
+}
+
+/* ---- Modal --------------------------------------------------------- */
+
+static void create_wifi_modal(lv_obj_t * parent)
+{
+    g_wifi_modal = lv_obj_create(parent);
+    lv_obj_set_size(g_wifi_modal, 480, 320);
+    lv_obj_set_align(g_wifi_modal, LV_ALIGN_CENTER);
+    lv_obj_clear_flag(g_wifi_modal, LV_OBJ_FLAG_SCROLLABLE);
+    /* Opaque so taps don't bleed through to widgets below. */
+    lv_obj_set_style_bg_color(g_wifi_modal, lv_color_hex(0x0D141B),
+                              LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(g_wifi_modal, LV_OPA_COVER,
+                            LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(g_wifi_modal, 0, 0);
+    /* No padding so children's coordinates are absolute — avoids the
+     * keyboard's bottom edge being clipped by the parent's content area. */
+    lv_obj_set_style_pad_all(g_wifi_modal, 0, 0);
+    lv_obj_add_flag(g_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+
+    /* Title */
+    lv_obj_t * title = lv_label_create(g_wifi_modal);
+    lv_label_set_text(title, "Configure WiFi");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xEAF6FF),
+                                LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+
+    /* SSID label + textarea */
+    lv_obj_t * ssid_lbl = lv_label_create(g_wifi_modal);
+    lv_label_set_text(ssid_lbl, "SSID");
+    lv_obj_align(ssid_lbl, LV_ALIGN_TOP_LEFT, 12, 36);
+    lv_obj_set_style_text_font(ssid_lbl, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_color(ssid_lbl, lv_color_hex(0x8FB3D2), 0);
+
+    g_wifi_ssid_input = lv_textarea_create(g_wifi_modal);
+    lv_obj_set_size(g_wifi_ssid_input, 456, 26);
+    lv_obj_align(g_wifi_ssid_input, LV_ALIGN_TOP_LEFT, 12, 50);
+    lv_textarea_set_one_line(g_wifi_ssid_input, true);
+    lv_textarea_set_placeholder_text(g_wifi_ssid_input, "Network name");
+    lv_textarea_set_max_length(g_wifi_ssid_input, 32);
+    lv_obj_add_event_cb(g_wifi_ssid_input, wifi_ta_focused_cb,
+                        LV_EVENT_FOCUSED, NULL);
+
+    /* Password label + textarea */
+    lv_obj_t * pass_lbl = lv_label_create(g_wifi_modal);
+    lv_label_set_text(pass_lbl, "Password");
+    lv_obj_align(pass_lbl, LV_ALIGN_TOP_LEFT, 12, 80);
+    lv_obj_set_style_text_font(pass_lbl, &lv_font_montserrat_10, 0);
+    lv_obj_set_style_text_color(pass_lbl, lv_color_hex(0x8FB3D2), 0);
+
+    g_wifi_pass_input = lv_textarea_create(g_wifi_modal);
+    lv_obj_set_size(g_wifi_pass_input, 456, 26);
+    lv_obj_align(g_wifi_pass_input, LV_ALIGN_TOP_LEFT, 12, 94);
+    lv_textarea_set_one_line(g_wifi_pass_input, true);
+    lv_textarea_set_password_mode(g_wifi_pass_input, true);
+    lv_textarea_set_placeholder_text(g_wifi_pass_input, "Password");
+    lv_textarea_set_max_length(g_wifi_pass_input, 64);
+    lv_obj_add_event_cb(g_wifi_pass_input, wifi_ta_focused_cb,
+                        LV_EVENT_FOCUSED, NULL);
+
+    /* Save / Cancel buttons */
+    lv_obj_t * btn_save = lv_button_create(g_wifi_modal);
+    lv_obj_set_size(btn_save, 90, 28);
+    lv_obj_align(btn_save, LV_ALIGN_TOP_LEFT, 12, 126);
+    lv_obj_add_event_cb(btn_save, wifi_save_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t * save_lbl = lv_label_create(btn_save);
+    lv_label_set_text(save_lbl, "Save");
+    lv_obj_center(save_lbl);
+
+    lv_obj_t * btn_cancel = lv_button_create(g_wifi_modal);
+    lv_obj_set_size(btn_cancel, 90, 28);
+    lv_obj_align(btn_cancel, LV_ALIGN_TOP_RIGHT, -12, 126);
+    lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x4D545B), 0);
+    lv_obj_add_event_cb(btn_cancel, wifi_cancel_btn_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t * cancel_lbl = lv_label_create(btn_cancel);
+    lv_label_set_text(cancel_lbl, "Cancel");
+    lv_obj_center(cancel_lbl);
+
+    /* On-screen keyboard, pinned to the bottom of the modal. The default
+     * lv_keyboard size is 100% × 50% of its parent and uses the active
+     * theme's button-matrix style; we override the size only and let the
+     * theme draw the keys.                                                */
+    g_wifi_keyboard = lv_keyboard_create(g_wifi_modal);
+    lv_obj_set_size(g_wifi_keyboard, 480, 158);
+    lv_obj_align(g_wifi_keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_keyboard_set_textarea(g_wifi_keyboard, g_wifi_ssid_input);
+}
+
+static void show_wifi_modal(void)
+{
+    if (g_wifi_modal == NULL) return;
+
+    /* Pre-fill SSID with the currently active one for quick edits. */
+    char ssid[33] = {0};
+    settings_wifi_current_ssid(ssid, sizeof(ssid));
+    lv_textarea_set_text(g_wifi_ssid_input, ssid);
+    lv_textarea_set_text(g_wifi_pass_input, "");
+
+    lv_keyboard_set_textarea(g_wifi_keyboard, g_wifi_ssid_input);
+    lv_obj_clear_flag(g_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(g_wifi_modal);
+    /* While the modal is up it is the topmost widget the user is looking
+     * at; new failure dots must stay underneath it, not the tabview.    */
+    settings_set_dot_overlay(g_wifi_modal);
+}
+
+static void hide_wifi_modal(void)
+{
+    if (g_wifi_modal == NULL) return;
+    lv_obj_add_flag(g_wifi_modal, LV_OBJ_FLAG_HIDDEN);
+    /* Tabview is once again the only floating overlay; restore it as the
+     * z-anchor for failure dots.                                          */
+    settings_set_dot_overlay(ui_TabView2);
+}
+
+/* ---- Callbacks ------------------------------------------------------ */
+
+static void vibration_switch_cb(lv_event_t * e)
+{
+    lv_obj_t * sw = (lv_obj_t *)lv_event_get_target(e);
+    settings_set_vibration_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+static void wifi_upload_switch_cb(lv_event_t * e)
+{
+    lv_obj_t * sw = (lv_obj_t *)lv_event_get_target(e);
+    settings_set_wifi_upload_enabled(lv_obj_has_state(sw, LV_STATE_CHECKED));
+}
+
+static void brightness_slider_cb(lv_event_t * e)
+{
+    lv_obj_t * sld = (lv_obj_t *)lv_event_get_target(e);
+    int32_t v = lv_slider_get_value(sld);
+    if (v < 0) v = 0;
+    if (v > 255) v = 255;
+    settings_set_brightness((uint8_t)v);
+    if (g_brightness_value_label) {
+        char pct[8];
+        snprintf(pct, sizeof(pct), "%ld%%", (long)((v * 100) / 255));
+        lv_label_set_text(g_brightness_value_label, pct);
+    }
+}
+
+static void wifi_configure_btn_cb(lv_event_t * e)
+{
+    (void)e;
+    show_wifi_modal();
+}
+
+static void wifi_forget_btn_cb(lv_event_t * e)
+{
+    (void)e;
+    settings_wifi_forget();
+    refresh_wifi_label();
+}
+
+static void wifi_save_btn_cb(lv_event_t * e)
+{
+    (void)e;
+    if (g_wifi_ssid_input == NULL || g_wifi_pass_input == NULL) return;
+    const char * ssid = lv_textarea_get_text(g_wifi_ssid_input);
+    const char * pass = lv_textarea_get_text(g_wifi_pass_input);
+    if (ssid == NULL || ssid[0] == '\0') {
+        /* Empty SSID — treat Save like Cancel to avoid erasing creds by accident. */
+        hide_wifi_modal();
+        return;
+    }
+    settings_wifi_apply(ssid, pass ? pass : "");
+    refresh_wifi_label();
+    hide_wifi_modal();
+}
+
+static void wifi_cancel_btn_cb(lv_event_t * e)
+{
+    (void)e;
+    hide_wifi_modal();
+}
+
+static void wifi_ta_focused_cb(lv_event_t * e)
+{
+    lv_obj_t * ta = (lv_obj_t *)lv_event_get_target(e);
+    if (g_wifi_keyboard) {
+        lv_keyboard_set_textarea(g_wifi_keyboard, ta);
+    }
 }

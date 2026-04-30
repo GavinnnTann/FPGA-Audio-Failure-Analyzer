@@ -2,9 +2,11 @@
 #include "wifi_config.h"
 
 #include <Arduino.h>
+#include <HTTPClient.h>
+#include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <HTTPClient.h>
+#include <cstring>
 
 namespace wifi_uploader {
 
@@ -14,34 +16,172 @@ namespace {
 
 constexpr int      kQueueDepth     = 8;     // Drop oldest if producer outruns uploader
 constexpr uint32_t kBootDelayMs    = 5000;  // Wait for system to stabilise before first POST
-constexpr uint32_t kHttpTimeoutMs  = WIFI_HTTP_TIMEOUT_MS; // Max time for a single HTTP round-trip
-constexpr size_t   kTaskStackBytes = 9216;  // TLS/mbedTLS needs ~5-6 KB headroom
-// WIFI_CONNECT_TIMEOUT_MS and WIFI_RETRY_DELAY_MS from wifi_config.h are now
-// handled by the ESP32 WiFi driver via setAutoReconnect — not used manually.
+constexpr uint32_t kHttpTimeoutMs  = WIFI_HTTP_TIMEOUT_MS;
+constexpr size_t   kTaskStackBytes = 9216;
+constexpr uint32_t kCommandPollMs  = 1500;  // Max time before pending cred change is honoured.
+
+constexpr size_t kSsidCap = 33;
+constexpr size_t kPassCap = 65;
 
 // Full Supabase REST endpoint, assembled at compile time.
 static const char kUrl[] = SUPABASE_HOST "/rest/v1/" SUPABASE_TABLE;
 
-// ---- Queue ------------------------------------------------------------------
+// ---- Queue + command state --------------------------------------------------
 
-static QueueHandle_t snap_queue = nullptr;
+QueueHandle_t snap_queue = nullptr;
 
-// ---- WiFi helpers -----------------------------------------------------------
+// Pending credential change. Updated from any thread; consumed by the
+// uploader task. Protected by a portMUX critical section (cheap on ESP32
+// dual-core).
+enum class WifiCmd : uint8_t {
+  None,
+  Apply,
+  Forget,
+};
 
-// WiFi is initialised once in the task after boot delay; the driver handles
-// reconnection automatically via setAutoReconnect(true).
-// ensure_wifi() checks both association AND a valid DHCP lease so we never
-// attempt a TLS connection before the IP stack is ready.
-static bool ensure_wifi() {
+struct PendingCommand {
+  WifiCmd cmd = WifiCmd::None;
+  char ssid[kSsidCap] = {0};
+  char pass[kPassCap] = {0};
+};
+
+PendingCommand g_pending;
+portMUX_TYPE g_pending_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// Cached copy of the active SSID for display purposes. Single-writer
+// (uploader task); readers tolerate a torn snapshot.
+char g_active_ssid[kSsidCap] = {0};
+portMUX_TYPE g_active_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// ---- NVS helpers ------------------------------------------------------------
+
+constexpr const char* kPrefsNamespace = "wifi";
+constexpr const char* kPrefsKeySsid   = "ssid";
+constexpr const char* kPrefsKeyPass   = "pass";
+constexpr const char* kPrefsKeyTouched = "set";
+
+bool stored_credentials(char* ssid, size_t ssid_cap,
+                        char* pass, size_t pass_cap,
+                        bool* user_touched) {
+  Preferences prefs;
+  if (!prefs.begin(kPrefsNamespace, true)) {
+    *user_touched = false;
+    ssid[0] = '\0';
+    pass[0] = '\0';
+    return false;
+  }
+  *user_touched = prefs.getBool(kPrefsKeyTouched, false);
+  String s = prefs.getString(kPrefsKeySsid, "");
+  String p = prefs.getString(kPrefsKeyPass, "");
+  prefs.end();
+
+  std::strncpy(ssid, s.c_str(), ssid_cap - 1);
+  ssid[ssid_cap - 1] = '\0';
+  std::strncpy(pass, p.c_str(), pass_cap - 1);
+  pass[pass_cap - 1] = '\0';
+  return true;
+}
+
+void persist_credentials(const char* ssid, const char* pass) {
+  Preferences prefs;
+  if (!prefs.begin(kPrefsNamespace, false)) {
+    return;
+  }
+  prefs.putBool(kPrefsKeyTouched, true);
+  prefs.putString(kPrefsKeySsid, ssid);
+  prefs.putString(kPrefsKeyPass, pass);
+  prefs.end();
+}
+
+void persist_forget() {
+  Preferences prefs;
+  if (!prefs.begin(kPrefsNamespace, false)) {
+    return;
+  }
+  prefs.putBool(kPrefsKeyTouched, true);
+  prefs.putString(kPrefsKeySsid, "");
+  prefs.putString(kPrefsKeyPass, "");
+  prefs.end();
+}
+
+// ---- WiFi state machine (runs only on the uploader task) -------------------
+
+void set_active_ssid(const char* ssid) {
+  portENTER_CRITICAL(&g_active_mux);
+  std::strncpy(g_active_ssid, ssid ? ssid : "", kSsidCap - 1);
+  g_active_ssid[kSsidCap - 1] = '\0';
+  portEXIT_CRITICAL(&g_active_mux);
+}
+
+void connect_wifi(const char* ssid, const char* pass) {
+  WiFi.persistent(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+  WiFi.disconnect(true, false);
+  delay(50);
+  WiFi.begin(ssid, pass);
+  set_active_ssid(ssid);
+}
+
+void disconnect_wifi() {
+  WiFi.disconnect(true, false);
+  set_active_ssid("");
+}
+
+void apply_initial_credentials() {
+  char ssid[kSsidCap] = {0};
+  char pass[kPassCap] = {0};
+  bool touched = false;
+  stored_credentials(ssid, sizeof(ssid), pass, sizeof(pass), &touched);
+
+  if (!touched) {
+    // Factory state — fall back to whatever was compiled into wifi_config.h.
+    std::strncpy(ssid, WIFI_SSID, sizeof(ssid) - 1);
+    ssid[sizeof(ssid) - 1] = '\0';
+    std::strncpy(pass, WIFI_PASS, sizeof(pass) - 1);
+    pass[sizeof(pass) - 1] = '\0';
+  }
+
+  if (ssid[0] == '\0') {
+    // User explicitly forgot WiFi — stay disconnected until apply.
+    return;
+  }
+  connect_wifi(ssid, pass);
+}
+
+void process_pending_command() {
+  PendingCommand cmd;
+  portENTER_CRITICAL(&g_pending_mux);
+  cmd = g_pending;
+  g_pending.cmd = WifiCmd::None;
+  portEXIT_CRITICAL(&g_pending_mux);
+
+  switch (cmd.cmd) {
+    case WifiCmd::Apply:
+      connect_wifi(cmd.ssid, cmd.pass);
+      break;
+    case WifiCmd::Forget:
+      disconnect_wifi();
+      break;
+    case WifiCmd::None:
+    default:
+      break;
+  }
+}
+
+// ---- WiFi readiness check ---------------------------------------------------
+
+bool ensure_wifi() {
   return WiFi.status() == WL_CONNECTED &&
          WiFi.localIP() != IPAddress(0, 0, 0, 0);
 }
 
 // ---- JSON builder -----------------------------------------------------------
 
-static void build_json(char* buf, size_t len, const Snapshot& s) {
-  const bool anomaly    = (s.result  != 0U);
-  const bool cnn_ran    = ((s.flags & 0x04U) != 0U);
+void build_json(char* buf, size_t len, const Snapshot& s) {
+  const bool anomaly     = (s.result  != 0U);
+  const bool cnn_ran     = ((s.flags & 0x04U) != 0U);
   const bool fpga_active = ((s.flags & 0x01U) != 0U);
 
   snprintf(buf, len,
@@ -67,35 +207,22 @@ static void build_json(char* buf, size_t len, const Snapshot& s) {
 
 // ---- Upload task (Core 0) ---------------------------------------------------
 
-static void uploader_task(void* /*arg*/) {
-  // Allow the display + UART system to fully boot before touching WiFi.
+void uploader_task(void* /*arg*/) {
   vTaskDelay(pdMS_TO_TICKS(kBootDelayMs));
-
-  // Start WiFi exactly once.
-  // setSleep(false)        — keeps radio awake between beacons; prevents
-  //                          beacon-miss events that cause spurious disconnects.
-  // setAutoReconnect(true) — the ESP32 WiFi driver re-associates silently
-  //                          without any call on our side, so we never need
-  //                          to call WiFi.begin() again after this point.
-  // persistent(false) — do NOT write credentials to NVS flash on every
-  // reconnect; NVS writes briefly stall the SPI bus and cause UART glitches.
-  WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);           // Disable power-save beaconing — most common
-                                  // cause of hotspot spurious disconnects.
-  WiFi.setAutoReconnect(true);    // Driver re-associates silently on drop.
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  apply_initial_credentials();
 
   while (true) {
-    // Block until a snapshot arrives (wake up at least every 30 s to check
-    // WiFi health even when no data is flowing).
+    // Always check for credential changes before touching the queue so a
+    // pending Apply / Forget is honoured promptly.
+    process_pending_command();
+
     Snapshot snap{};
-    if (xQueueReceive(snap_queue, &snap, pdMS_TO_TICKS(30000)) != pdTRUE) {
-      continue;  // Timeout — nothing to send.
+    if (xQueueReceive(snap_queue, &snap, pdMS_TO_TICKS(kCommandPollMs)) != pdTRUE) {
+      continue;  // timeout — go round and re-check pending command.
     }
 
-    // Drain any backlog that built up during a slow HTTP round-trip.
-    // We keep only the most recent snapshot so the dashboard shows live data.
+    // Drain any backlog that built up during a slow HTTP round-trip;
+    // keep only the most recent snapshot so the dashboard shows live data.
     {
       Snapshot newer{};
       while (xQueueReceive(snap_queue, &newer, 0) == pdTRUE) {
@@ -103,39 +230,29 @@ static void uploader_task(void* /*arg*/) {
       }
     }
 
-    // Skip POST if not currently associated; autoReconnect will restore
-    // the link on its own — no manual retry needed here.
     if (!ensure_wifi()) {
       continue;
     }
 
-    // Build JSON payload.
     char body[256];
     build_json(body, sizeof(body), snap);
 
-    // getMaxAllocHeap() is the largest single contiguous free block.
-    // mbedTLS needs ~36 KB contiguous (16 KB in + 4 KB out + ~16 KB overhead).
     const uint32_t max_block = ESP.getMaxAllocHeap();
     if (max_block < 40000U) {
       vTaskDelay(pdMS_TO_TICKS(2000));
       continue;
     }
 
-    // Create fresh client objects per request — reusing a static
-    // WiFiClientSecure causes stale TLS after server-side closure.
     WiFiClientSecure tls;
     HTTPClient       http;
-    tls.setInsecure();  // Skip cert verify — acceptable for telemetry.
+    tls.setInsecure();
 
-    // POST to Supabase REST API.
     if (http.begin(tls, kUrl)) {
       http.addHeader("Content-Type",  "application/json");
       http.addHeader("apikey",        SUPABASE_KEY);
       http.addHeader("Authorization", "Bearer " SUPABASE_KEY);
-      // "return=minimal" suppresses the response body (saves bandwidth).
       http.addHeader("Prefer",        "return=minimal");
       http.setTimeout(kHttpTimeoutMs);
-
       const int code = http.POST(String(body));
       (void)code;
       http.end();
@@ -153,29 +270,59 @@ void init() {
     return;
   }
 
-  // Pin to Core 0 (the ESP32 WiFi/BT radio core).
-  // Arduino loop() runs on Core 1 — the two never share CPU time on the
-  // same core, so WiFi TLS stalls cannot affect display or UART parsing.
   const BaseType_t rc = xTaskCreatePinnedToCore(
       uploader_task,
       "wifi_up",
       kTaskStackBytes,
       nullptr,
-      1,        // Priority 1 (above idle, same as Arduino loop)
+      1,
       nullptr,
-      0);       // Core 0
-
+      0);
   (void)rc;
 }
 
 void push(const Snapshot& snap) {
   if (snap_queue == nullptr) return;
-  // Non-blocking: silently drop if queue is full.
   xQueueSend(snap_queue, &snap, 0);
 }
 
 bool is_connected() {
   return WiFi.status() == WL_CONNECTED;
+}
+
+bool current_ssid(char* out, size_t cap) {
+  if (out == nullptr || cap == 0) return false;
+  portENTER_CRITICAL(&g_active_mux);
+  std::strncpy(out, g_active_ssid, cap - 1);
+  out[cap - 1] = '\0';
+  portEXIT_CRITICAL(&g_active_mux);
+  return out[0] != '\0';
+}
+
+void apply_credentials(const char* ssid, const char* pass) {
+  if (ssid == nullptr || pass == nullptr) return;
+
+  // Persist first so a power loss between persist and reconnect leaves
+  // the device with the correct config on next boot.
+  persist_credentials(ssid, pass);
+
+  portENTER_CRITICAL(&g_pending_mux);
+  g_pending.cmd = WifiCmd::Apply;
+  std::strncpy(g_pending.ssid, ssid, kSsidCap - 1);
+  g_pending.ssid[kSsidCap - 1] = '\0';
+  std::strncpy(g_pending.pass, pass, kPassCap - 1);
+  g_pending.pass[kPassCap - 1] = '\0';
+  portEXIT_CRITICAL(&g_pending_mux);
+}
+
+void forget_credentials() {
+  persist_forget();
+
+  portENTER_CRITICAL(&g_pending_mux);
+  g_pending.cmd = WifiCmd::Forget;
+  g_pending.ssid[0] = '\0';
+  g_pending.pass[0] = '\0';
+  portEXIT_CRITICAL(&g_pending_mux);
 }
 
 }  // namespace wifi_uploader

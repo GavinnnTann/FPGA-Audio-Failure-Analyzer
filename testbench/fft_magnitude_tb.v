@@ -128,7 +128,7 @@ module fft_magnitude_tb;
     integer i;
 
     initial begin
-        $dumpfile("fft_magnitude_tb.vcd");
+        $dumpfile("waveforms/fft_magnitude_tb.vcd");
         $dumpvars(0, fft_magnitude_tb);
 
         rst_n = 0;

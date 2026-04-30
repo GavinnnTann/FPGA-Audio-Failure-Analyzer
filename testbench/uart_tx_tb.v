@@ -106,7 +106,7 @@ module uart_tx_tb;
     // Stimulus
     // ----------------------------------------------------------------
     initial begin
-        $dumpfile("uart_tx_tb.vcd");
+        $dumpfile("waveforms/uart_tx_tb.vcd");
         $dumpvars(0, uart_tx_tb);
 
         // Reset
