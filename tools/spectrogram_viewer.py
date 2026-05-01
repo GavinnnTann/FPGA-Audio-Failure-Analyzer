@@ -439,17 +439,38 @@ class SpectrogramApp:
         self._clim_peak_sim = 1000.0
         self._render_ms = 0.0  # last frame render time
 
+        # Must run BEFORE tk.Tk(): Windows binds the taskbar group to whatever
+        # AUMID was active when the window was first registered. Setting it
+        # afterwards leaves the window grouped under python.exe with the
+        # default tkinter feather icon.
+        if sys.platform == "win32":
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FPGASpectrogramViewer")
+            except Exception:
+                pass
+
         self.root = tk.Tk()
         self.root.title("FPGA Spectrogram Viewer + Simulator")
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.minsize(1600, 900)
         self.root.configure(bg="#2b2b2b")
+
+        # Set icon (works in both development and PyInstaller-bundled exe).
+        # default=path sets BOTH the small (title bar) and large (taskbar /
+        # Alt-Tab) icons; plain iconbitmap(path) only sets the small one.
         try:
-            _ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Audio Failure Analyzer Logo.ico")
-            self.root.iconbitmap(_ico)
+            if hasattr(sys, '_MEIPASS'):
+                _ico = os.path.join(sys._MEIPASS, "Audio Failure Analyzer Logo.ico")
+            else:
+                _ico = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Audio Failure Analyzer Logo.ico")
+
+            if os.path.exists(_ico):
+                self.root.iconbitmap(default=_ico)
         except Exception:
             pass
-        self._apply_dark_titlebar()
+
+        # Schedule dark title bar application after window is rendered
+        self.root.after(100, self._apply_dark_titlebar_deferred)
         # Open maximized by default for lab use (cross-platform fallback).
         try:
             self.root.state("zoomed")  # Windows
@@ -543,25 +564,51 @@ class SpectrogramApp:
         self._schedule_update()
 
     # ------------------------------------------------------------------
-    @staticmethod
-    def _apply_dark_titlebar():
-        """Ask Windows to render the title bar in dark mode.
+    def _apply_dark_titlebar_deferred(self):
+        """Apply dark mode to the window title bar after it's been rendered.
 
-        Uses DwmSetWindowAttribute (DWMWA_USE_IMMERSIVE_DARK_MODE = 20).
-        Silently ignored on non-Windows platforms or older Windows versions.
+        Tk's .after() invokes the callback with zero arguments, so this must
+        be a regular bound method (not @staticmethod) — otherwise `self`
+        wouldn't be passed and the call silently raises a TypeError.
         """
         if sys.platform != "win32":
             return
         try:
-            hwnd = ctypes.windll.user32.GetForegroundWindow()
-            # Attribute 20 = DWMWA_USE_IMMERSIVE_DARK_MODE (Windows 11 / 10 21H1+)
-            DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+            self.root.update_idletasks()
+
+            u32 = ctypes.windll.user32
+            dwm = ctypes.windll.dwmapi
+
+            # On x64 Windows, HWNDs are 64-bit. ctypes' default return type is
+            # c_int (32-bit), so without setting restype the upper bits of the
+            # handle get silently truncated and DwmSetWindowAttribute targets
+            # garbage — this was the bug behind the title bar staying white.
+            u32.GetAncestor.restype = ctypes.c_void_p
+            u32.GetAncestor.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+
+            # Tk's winfo_id() returns the inner client-area HWND. The wrapper
+            # toplevel that actually owns the title bar is its ancestor.
+            GA_ROOT = 2
+            child = ctypes.c_void_p(self.root.winfo_id())
+            hwnd = u32.GetAncestor(child, GA_ROOT) or child.value
+            hwnd = ctypes.c_void_p(hwnd)
+
+            # Try Windows 11 / Win10 19041+ (20), fall back to the earlier
+            # undocumented value (19) for older 20H1 builds.
             value = ctypes.c_int(1)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_USE_IMMERSIVE_DARK_MODE,
-                ctypes.byref(value),
-                ctypes.sizeof(value),
+            for attr in (20, 19):
+                if dwm.DwmSetWindowAttribute(
+                    hwnd, attr, ctypes.byref(value), ctypes.sizeof(value)
+                ) == 0:
+                    break
+
+            # Force a non-client redraw so the title bar repaints right away
+            # — without this, the bar sometimes stays white until the user
+            # resizes the window or alt-tabs away and back.
+            SWP_NOSIZE, SWP_NOMOVE, SWP_NOZORDER, SWP_FRAMECHANGED = 0x1, 0x2, 0x4, 0x20
+            u32.SetWindowPos(
+                hwnd, 0, 0, 0, 0, 0,
+                SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER | SWP_FRAMECHANGED,
             )
         except Exception:
             pass
@@ -1087,10 +1134,10 @@ class SpectrogramApp:
 
         # ── Project / Course ─────────────────────────────────────────────
         section("Project & Course")
-        body(f"Course:    SUTD-EPD 50.002  Digital Systems Laboratory", color=GREEN)
+        body(f"Course:    SUTD-EPD 30.110  Digital Systems Laboratory", color=GREEN)
         body(f"Instructor: Prof Teo Tee Hui  (Singapore University of Technology and Design)")
         body(f"Creator:    Gavin Tan")
-        body(f"Term:       Term 6, Academic Year 2025 / 2026")
+        body(f"Term:       Term 6, Academic Year 2026")
         divider()
 
         # ── Project Overview ─────────────────────────────────────────────

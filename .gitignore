@@ -78,6 +78,8 @@ __pycache__/
 # Uncomment if you don't want to share specific configurations
 # scripts/config.tcl
 Display_codes/Example 480x320 display
+submission
+spectrogram_viewer.spec
 # ===================================================================
 # Personal Projects Directory
 # ===================================================================
