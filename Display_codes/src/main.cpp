@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
+#include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -42,6 +43,14 @@ constexpr UBaseType_t kSpecQueueDepth = 4;
 constexpr size_t kUartTaskStack = 4096;
 constexpr UBaseType_t kUartTaskPriority = 4;  // Above touch (3) and wifi_up (1).
 constexpr uint32_t kUartIdleWakeMs = 50;
+
+// Task Watchdog: any monitored task that fails to call esp_task_wdt_reset()
+// within this window triggers a panic + reset. 8 s is comfortably longer
+// than the worst legitimate stall on Core 1 (full-screen render + dot
+// recreation) but short enough to make the device feel snappy when it does
+// recover. The WiFi task is intentionally NOT monitored — TLS handshakes
+// can legitimately take 5-6 s on flaky networks.
+constexpr uint32_t kWdtTimeoutSec = 8;
 
 HardwareSerial fpga_uart(2);
 void* draw_buf_1 = nullptr;
@@ -163,7 +172,14 @@ void uart_rx_task(void* /*arg*/) {
   uint8_t last_seq_local = 0;
   uint32_t last_valid_ms = 0;
 
+  // Self-register with the Task Watchdog. The reset call inside the loop
+  // proves liveness; if the parser ever wedges on a syscall the WDT will
+  // fire and the system reboots cleanly.
+  esp_task_wdt_add(NULL);
+
   for (;;) {
+    esp_task_wdt_reset();
+
     // Block until the UART event task signals fresh data (interrupt path)
     // or the wake-tick fires so we can publish updated max_rx_backlog.
     xSemaphoreTake(g_uart_rx_sem, pdMS_TO_TICKS(kUartIdleWakeMs));
@@ -186,10 +202,14 @@ void uart_rx_task(void* /*arg*/) {
         break;
       }
 
-      // Bulk forward to USB serial — one write per chunk, never per byte.
-      // The TX buffer is sized to absorb a full chunk so this never blocks
-      // the parser even when the host pauses briefly.
-      Serial.write(chunk, static_cast<size_t>(got));
+      // Bulk forward to USB serial. If the host has stopped draining (PC
+      // sleeping, viewer paused) the TX buffer would otherwise fill and
+      // block the parser indefinitely. Drop the whole chunk when buffer
+      // headroom is short — the framing protocol's sync bytes let the
+      // host resync after a gap, which is far better than a hang.
+      if (Serial.availableForWrite() >= static_cast<int>(got)) {
+        Serial.write(chunk, static_cast<size_t>(got));
+      }
 
       const uint32_t now_ms = millis();
 
@@ -425,6 +445,14 @@ void setup() {
   // parser. 4 KB at 1 Mbps = ~32 ms of slack.
   Serial.setTxBufferSize(kUsbSerialTxBuf);
 
+  // Configure the Task Watchdog before spawning any monitored task. The
+  // call is idempotent — if the Arduino runtime already enabled TWDT the
+  // re-init just updates the timeout. `true` for the panic flag means a
+  // missed feed triggers a panic + reset rather than a CPU dump only.
+  esp_task_wdt_init(kWdtTimeoutSec, true);
+  // Subscribe the loopTask (i.e. the task we are currently running on).
+  esp_task_wdt_add(NULL);
+
   hardware::init_board_pins();
   hardware::init_touchscreen();
 
@@ -482,6 +510,10 @@ void setup() {
 }
 
 void loop() {
+  // Feed the watchdog as the very first thing so even an unexpectedly long
+  // single iteration only consumes one timeout window — not two.
+  esp_task_wdt_reset();
+
   const uint32_t now = millis();
   screen2_telemetry::TelemetryData& telemetry = screen2_telemetry::data();
 

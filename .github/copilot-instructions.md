@@ -23,3 +23,11 @@ This is a Verilog hardware development project targeting the CMOD A7 FPGA board 
 2. Define pin constraints in `constraints/`
 3. Run synthesis, implementation, and bitstream generation using build script
 4. Program CMOD A7 board via USB-JTAG
+
+<claude-mem-context>
+# claude-mem: Cross-Session Memory
+
+*No context yet. Complete your first session and context will appear here.*
+
+Use claude-mem's MCP search tools for manual memory queries.
+</claude-mem-context>

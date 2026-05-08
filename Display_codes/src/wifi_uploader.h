@@ -59,4 +59,11 @@ void apply_credentials(const char* ssid, const char* pass);
 // apply_credentials() again.
 void forget_credentials();
 
+// Wipe the persisted credentials entirely so the next boot falls back
+// to the WIFI_SSID / WIFI_PASS values compiled into wifi_config.h, and
+// reconnect immediately using those values. Use this to recover when
+// stale NVS state from earlier testing prevents the device from
+// associating with the network defined in wifi_config.h.
+void reset_to_defaults();
+
 }  // namespace wifi_uploader

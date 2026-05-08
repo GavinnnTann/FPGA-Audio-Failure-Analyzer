@@ -51,6 +51,10 @@ void settings_wifi_forget(void) {
   wifi_uploader::forget_credentials();
 }
 
+void settings_wifi_reset_to_defaults(void) {
+  wifi_uploader::reset_to_defaults();
+}
+
 void settings_set_dot_overlay(lv_obj_t* overlay) {
   failure_dots::set_overlay(overlay);
 }

@@ -27,7 +27,7 @@ void ui_Screen4_screen_init(void)
     /* ── root screen ────────────────────────────────────────────────────── */
     ui_Screen4 = lv_obj_create(NULL);
     lv_obj_set_size(ui_Screen4, 480, 320);
-    lv_obj_set_style_bg_color(ui_Screen4, lv_color_hex(0x060808), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(ui_Screen4, lv_color_hex(0xF8FAFA), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(ui_Screen4, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_remove_flag(ui_Screen4, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(ui_Screen4, LV_OBJ_FLAG_CLICKABLE);
@@ -72,14 +72,14 @@ void ui_Screen4_screen_init(void)
     lv_obj_t * lbl_scan = lv_label_create(col);
     lv_label_set_text(lbl_scan, "SCAN TO");
     lv_obj_set_style_text_font(lbl_scan, &lv_font_montserrat_28, LV_PART_MAIN);
-    lv_obj_set_style_text_color(lbl_scan, lv_color_hex(0x00CCB8), LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_scan, lv_color_hex(0x007A6E), LV_PART_MAIN);
     lv_obj_set_style_text_letter_space(lbl_scan, 4, LV_PART_MAIN);
 
     /* "ACCESS WEBAPP" */
     lv_obj_t * lbl_access = lv_label_create(col);
     lv_label_set_text(lbl_access, "ACCESS WEBAPP");
     lv_obj_set_style_text_font(lbl_access, &lv_font_montserrat_16, LV_PART_MAIN);
-    lv_obj_set_style_text_color(lbl_access, lv_color_hex(0x6AB8B0), LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_access, lv_color_hex(0x008077), LV_PART_MAIN);
     lv_obj_set_style_text_letter_space(lbl_access, 2, LV_PART_MAIN);
 
     /* thin teal divider */
@@ -98,14 +98,14 @@ void ui_Screen4_screen_init(void)
     lv_obj_set_width(lbl_url, 200);
     lv_obj_set_style_text_align(lbl_url, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
     lv_obj_set_style_text_font(lbl_url, &lv_font_montserrat_10, LV_PART_MAIN);
-    lv_obj_set_style_text_color(lbl_url, lv_color_hex(0x1E4E4A), LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_url, lv_color_hex(0x2A7A74), LV_PART_MAIN);
     lv_obj_set_style_text_letter_space(lbl_url, 1, LV_PART_MAIN);
 
     /* back hint */
     lv_obj_t * lbl_hint = lv_label_create(col);
     lv_label_set_text(lbl_hint, "TAP ANYWHERE TO GO BACK");
     lv_obj_set_style_text_font(lbl_hint, &lv_font_montserrat_10, LV_PART_MAIN);
-    lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x1E4E4A), LV_PART_MAIN);
+    lv_obj_set_style_text_color(lbl_hint, lv_color_hex(0x445552), LV_PART_MAIN);
     lv_obj_set_style_text_letter_space(lbl_hint, 1, LV_PART_MAIN);
 }
 

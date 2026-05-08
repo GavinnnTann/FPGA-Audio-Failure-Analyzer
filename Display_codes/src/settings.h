@@ -32,6 +32,10 @@ void settings_set_brightness(uint8_t level);
 bool settings_wifi_current_ssid(char* out, size_t cap);
 void settings_wifi_apply(const char* ssid, const char* pass);
 void settings_wifi_forget(void);
+/* Wipe stored credentials and reconnect with WIFI_SSID / WIFI_PASS from
+ * wifi_config.h. Useful as a recovery path when stale NVS state stops the
+ * device from associating with the compile-time default network. */
+void settings_wifi_reset_to_defaults(void);
 
 /* Forward-declare lv_obj_t to avoid pulling lvgl.h into translation units
  * that don't already use it. The pointer is opaque from settings'

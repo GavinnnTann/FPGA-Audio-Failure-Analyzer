@@ -37,6 +37,7 @@ enum class WifiCmd : uint8_t {
   None,
   Apply,
   Forget,
+  ResetDefaults,  // wipe NVS and reconnect with compiled WIFI_SSID/PASS
 };
 
 struct PendingCommand {
@@ -104,6 +105,17 @@ void persist_forget() {
   prefs.end();
 }
 
+void persist_clear() {
+  // Erase the entire wifi-credentials namespace so the next boot falls
+  // back to the compiled WIFI_SSID/PASS as if NVS had never been touched.
+  Preferences prefs;
+  if (!prefs.begin(kPrefsNamespace, false)) {
+    return;
+  }
+  prefs.clear();
+  prefs.end();
+}
+
 // ---- WiFi state machine (runs only on the uploader task) -------------------
 
 void set_active_ssid(const char* ssid) {
@@ -113,12 +125,31 @@ void set_active_ssid(const char* ssid) {
   portEXIT_CRITICAL(&g_active_mux);
 }
 
-void connect_wifi(const char* ssid, const char* pass) {
+bool g_wifi_started = false;
+
+// First-ever WiFi.begin in this boot. Mirrors the pre-refactor sequence
+// — no disconnect, no radio toggle. Calling disconnect(true, ...) before
+// begin races the supplicant on some arduino-esp32 builds and leaves the
+// device unable to associate.
+void start_wifi(const char* ssid, const char* pass) {
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
-  WiFi.disconnect(true, false);
+  WiFi.begin(ssid, pass);
+  set_active_ssid(ssid);
+  g_wifi_started = true;
+}
+
+// Re-associate with a different AP at runtime. Drops the existing
+// connection (radio stays on) so the supplicant starts a fresh auth.
+void switch_wifi(const char* ssid, const char* pass) {
+  if (!g_wifi_started) {
+    // Defensive: if we never started, fall through to the simple path.
+    start_wifi(ssid, pass);
+    return;
+  }
+  WiFi.disconnect(false, false);  // wifioff=false: keep radio up
   delay(50);
   WiFi.begin(ssid, pass);
   set_active_ssid(ssid);
@@ -147,7 +178,7 @@ void apply_initial_credentials() {
     // User explicitly forgot WiFi — stay disconnected until apply.
     return;
   }
-  connect_wifi(ssid, pass);
+  start_wifi(ssid, pass);
 }
 
 void process_pending_command() {
@@ -159,11 +190,24 @@ void process_pending_command() {
 
   switch (cmd.cmd) {
     case WifiCmd::Apply:
-      connect_wifi(cmd.ssid, cmd.pass);
+      switch_wifi(cmd.ssid, cmd.pass);
       break;
     case WifiCmd::Forget:
       disconnect_wifi();
       break;
+    case WifiCmd::ResetDefaults: {
+      // NVS already cleared by the caller; reconnect using the values
+      // baked into wifi_config.h. If those are blank too, just stay
+      // disconnected.
+      static const char default_ssid[] = WIFI_SSID;
+      static const char default_pass[] = WIFI_PASS;
+      if (default_ssid[0] != '\0') {
+        switch_wifi(default_ssid, default_pass);
+      } else {
+        disconnect_wifi();
+      }
+      break;
+    }
     case WifiCmd::None:
     default:
       break;
@@ -320,6 +364,18 @@ void forget_credentials() {
 
   portENTER_CRITICAL(&g_pending_mux);
   g_pending.cmd = WifiCmd::Forget;
+  g_pending.ssid[0] = '\0';
+  g_pending.pass[0] = '\0';
+  portEXIT_CRITICAL(&g_pending_mux);
+}
+
+void reset_to_defaults() {
+  // Clear NVS first so even if the queued command is dropped, the next
+  // boot still picks up the compiled defaults.
+  persist_clear();
+
+  portENTER_CRITICAL(&g_pending_mux);
+  g_pending.cmd = WifiCmd::ResetDefaults;
   g_pending.ssid[0] = '\0';
   g_pending.pass[0] = '\0';
   portEXIT_CRITICAL(&g_pending_mux);

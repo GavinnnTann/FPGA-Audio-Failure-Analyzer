@@ -27,6 +27,32 @@
   --font-mono:    'Share Tech Mono', 'Courier New', monospace;
 }
 
+/* ─── Light Theme ────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg:           #f8fafc;
+  --bg-card:      #ffffff;
+  --bg-header:    #ffffff05;
+
+  --amber:        #0e8a7f;
+  --amber-hi:     #00a896;
+  --amber-lo:     #004d47;
+  --amber-glow:   rgba(0, 168, 150, 0.08);
+
+  --red:          #cc3d2e;
+  --red-hi:       #dc4a3a;
+  --red-glow:     rgba(220, 74, 58, 0.12);
+
+  --green:        #0e8a7f;
+  --green-hi:     #00a896;
+
+  --text:         #2d6b62;
+  --text-hi:      #1a4a42;
+  --text-lo:      #7a9f96;
+
+  --border:       #e5f0ed;
+  --border-hi:    #d0e6e0;
+}
+
 /* ─── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; }
@@ -34,13 +60,14 @@ html { font-size: 16px; }
 body {
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(0, 204, 184, 0.05) 0%, transparent 100%),
-    radial-gradient(circle at 1px 1px, rgba(0, 204, 184, 0.04) 1px, transparent 0);
+    radial-gradient(ellipse 80% 40% at 50% -10%, rgba(0, 168, 150, 0.08) 0%, transparent 100%),
+    radial-gradient(circle at 1px 1px, rgba(0, 168, 150, 0.04) 1px, transparent 0);
   background-size: 100% 100%, 22px 22px;
   color: var(--text);
   font-family: var(--font-mono);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────────── */
@@ -139,6 +166,27 @@ body {
   box-shadow: 0 0 12px var(--amber-glow), inset 0 0 12px var(--amber-glow);
 }
 
+/* ─── Theme Toggle Button ────────────────────────────────────────────────── */
+.theme-toggle {
+  background: transparent;
+  border: 1px solid var(--border-hi);
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-lo);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.theme-toggle:hover {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
 .live-dot {
   width: 7px;
   height: 7px;
@@ -187,8 +235,8 @@ body {
 }
 
 .card.card-alert {
-  background: #0e0806;
-  box-shadow: inset 0 0 60px rgba(184, 36, 22, 0.1);
+  background: color-mix(in srgb, var(--bg-card) 70%, var(--red-glow));
+  box-shadow: inset 0 0 60px var(--red-glow);
 }
 
 .card-label {
@@ -322,7 +370,7 @@ table {
 thead tr {
   position: sticky;
   top: 0;
-  background: #0a0806;
+  background: var(--bg-card);
   z-index: 2;
 }
 
@@ -350,7 +398,7 @@ tr.row-anomaly > td:first-child { border-left: 2px solid var(--red-hi); padding-
 
 tr.row-new { animation: row-flash 0.9s ease; }
 
-tr:hover > td { background: rgba(196, 124, 8, 0.04); }
+tr:hover > td { background: color-mix(in srgb, var(--bg-card) 80%, var(--amber-glow)); }
 
 /* ─── RMS inline bar ─────────────────────────────────────────────────────── */
 .rms-cell { display: flex; align-items: center; gap: 10px; }
@@ -406,7 +454,7 @@ tr:hover > td { background: rgba(196, 124, 8, 0.04); }
 }
 
 @keyframes row-flash {
-  0%   { background: rgba(196, 124, 8, 0.18); }
+  0%   { background: color-mix(in srgb, var(--bg-card) 60%, var(--amber-glow)); }
   100% { background: transparent; }
 }
 

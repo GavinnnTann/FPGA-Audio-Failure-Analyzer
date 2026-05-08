@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { useTheme } from './ThemeProvider';
 
 // ── Supabase (handles missing env vars gracefully) ────────────────────────────
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -110,6 +111,7 @@ function RmsChart({ rows, maxRms }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const { isDark, toggleTheme } = useTheme();
   const [rows,      setRows]      = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState(null);
@@ -239,6 +241,14 @@ export default function Dashboard() {
             <div className={`live-dot ${isLive ? 'on' : ''}`} />
             {isLive ? 'LIVE' : 'NO DATA'}
           </div>
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? '☀️ Light' : '🌙 Dark'}
+          </button>
         </div>
       </header>
 

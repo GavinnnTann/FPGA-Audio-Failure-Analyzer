@@ -58,6 +58,7 @@ void ui_set_uart2_monitor_text(const char * text);
 extern lv_obj_t * ui_Screen3;
 
 // IMAGE ASSETS
+LV_IMG_DECLARE(logo_light);
 LV_IMG_DECLARE(ui_img_new_nexswap_logo_big_png);    // assets/new nexswap logo big.png
 LV_IMG_DECLARE(ui_img_nexswap_2_png);    // assets/nexswap_2.png
 LV_IMG_DECLARE(ui_img_ellipsis_png);    // assets/ellipsis.png

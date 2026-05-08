@@ -1,6 +1,7 @@
 #include "hardware.h"
 
 #include <Wire.h>
+#include <esp_task_wdt.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
@@ -92,7 +93,14 @@ void read_ft6206_once() {
 }
 
 void touch_task(void* /*arg*/) {
+  // Self-register with the Task Watchdog. If I2C ever wedges (FT6206
+  // refusing to ACK, bus stuck low), the failed reset call will trip the
+  // WDT and the system reboots into a clean state.
+  esp_task_wdt_add(NULL);
+
   for (;;) {
+    esp_task_wdt_reset();
+
     if (TouchIntPin >= 0 && g_touch_int_sem != nullptr) {
       // Wait for INT pulse from FT6206. Wake at least every 30 ms so we
       // still publish a release transition if the controller ever drops

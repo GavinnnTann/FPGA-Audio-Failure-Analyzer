@@ -50,6 +50,7 @@ static void wifi_upload_switch_cb(lv_event_t * e);
 static void brightness_slider_cb(lv_event_t * e);
 static void wifi_configure_btn_cb(lv_event_t * e);
 static void wifi_forget_btn_cb(lv_event_t * e);
+static void wifi_reset_btn_cb(lv_event_t * e);
 static void wifi_save_btn_cb(lv_event_t * e);
 static void wifi_cancel_btn_cb(lv_event_t * e);
 static void wifi_ta_focused_cb(lv_event_t * e);
@@ -118,12 +119,18 @@ void ui_Screen2_screen_init(void)
 {
     ui_Screen2 = lv_obj_create(NULL);
     lv_obj_remove_flag(ui_Screen2, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Screen2, lv_color_hex(0xF2F4F7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Screen2, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_Panel2 = lv_obj_create(ui_Screen2);
     lv_obj_set_width(ui_Panel2, 480);
     lv_obj_set_height(ui_Panel2, 320);
     lv_obj_set_align(ui_Panel2, LV_ALIGN_CENTER);
     lv_obj_remove_flag(ui_Panel2, LV_OBJ_FLAG_CLICK_FOCUSABLE | LV_OBJ_FLAG_SCROLLABLE);      /// Flags
+    lv_obj_set_style_bg_color(ui_Panel2, lv_color_hex(0xF2F4F7), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_Panel2, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_width(ui_Panel2, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_radius(ui_Panel2, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
 
     ui_Button1 = lv_button_create(ui_Screen2);
@@ -134,10 +141,10 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_align(ui_Button1, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_Button1, LV_OBJ_FLAG_SCROLL_ON_FOCUS);     /// Flags
     lv_obj_remove_flag(ui_Button1, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-    lv_obj_set_style_bg_color(ui_Button1, lv_color_hex(0x292831), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_Button1, lv_color_hex(0xDDE0EA), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(ui_Button1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_image_src(ui_Button1, &ui_img_ellipsis_png, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_image_recolor(ui_Button1, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_image_recolor(ui_Button1, lv_color_hex(0x222222), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_image_recolor_opa(ui_Button1, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_TabView2 = lv_tabview_create(ui_Screen2);
@@ -154,7 +161,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_style_text_color(lv_tabview_get_tab_bar(ui_TabView2), lv_color_hex(0x000000),
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_opa(lv_tabview_get_tab_bar(ui_TabView2), 255,  LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(lv_tabview_get_tab_bar(ui_TabView2), lv_color_hex(0x9A9A9A),
+    lv_obj_set_style_bg_color(lv_tabview_get_tab_bar(ui_TabView2), lv_color_hex(0xE0E0E0),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(lv_tabview_get_tab_bar(ui_TabView2), 255,  LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -222,7 +229,7 @@ void ui_Screen2_screen_init(void)
     lv_arc_set_bg_angles(ui_Arc1, 270, 269);
     lv_obj_set_style_arc_width(ui_Arc1, 12, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_arc_width(ui_Arc1, 12, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_arc_color(ui_Arc1, lv_color_hex(0x4D545B), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_arc_color(ui_Arc1, lv_color_hex(0xCCCCCC), LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_set_style_pad_left(ui_Arc1, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_right(ui_Arc1, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
@@ -240,10 +247,10 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_align(ui_PanelTelemetry, LV_ALIGN_CENTER);
     lv_obj_remove_flag(ui_PanelTelemetry, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_radius(ui_PanelTelemetry, 18, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_PanelTelemetry, lv_color_hex(0x1D2228), LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_PanelTelemetry, 235, LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_color(ui_PanelTelemetry, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_bg_opa(ui_PanelTelemetry, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(ui_PanelTelemetry, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(ui_PanelTelemetry, lv_color_hex(0x39424D), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_border_color(ui_PanelTelemetry, lv_color_hex(0xD0D5DC), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_add_event_cb(ui_PanelTelemetry, ui_event_TelemetryPanel_open_spectrogram, LV_EVENT_CLICKED, NULL);
 
     // RMS bar inside telemetry panel.
@@ -276,6 +283,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_y(ui_StatusLabel, -108);
     lv_obj_set_align(ui_StatusLabel, LV_ALIGN_CENTER);
     lv_label_set_text(ui_StatusLabel, "Normal");
+    lv_obj_set_style_text_color(ui_StatusLabel, lv_color_hex(0x111111), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_StatusLabel, &lv_font_montserrat_28, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_UptimeLabel = lv_label_create(ui_PanelTelemetry);
@@ -285,7 +293,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_y(ui_UptimeLabel, -72);
     lv_obj_set_align(ui_UptimeLabel, LV_ALIGN_CENTER);
     lv_label_set_text(ui_UptimeLabel, "uptime");
-    lv_obj_set_style_text_color(ui_UptimeLabel, lv_color_hex(0xCAD1D8), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(ui_UptimeLabel, lv_color_hex(0x335577), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_UptimeLabel, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     ui_FpgaStateLabel = lv_label_create(ui_PanelTelemetry);
@@ -295,6 +303,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_y(ui_FpgaStateLabel, -35);
     lv_obj_set_align(ui_FpgaStateLabel, LV_ALIGN_CENTER);
     lv_label_set_text(ui_FpgaStateLabel, "Sleep\nCNN Wait");
+    lv_obj_set_style_text_color(ui_FpgaStateLabel, lv_color_hex(0x222222), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_align(ui_FpgaStateLabel, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_FpgaStateLabel, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
 
@@ -306,7 +315,7 @@ void ui_Screen2_screen_init(void)
     lv_obj_set_y(ui_WifiLabel, 8);
     lv_obj_set_align(ui_WifiLabel, LV_ALIGN_CENTER);
     lv_label_set_text(ui_WifiLabel, "No WiFi");
-    lv_obj_set_style_text_color(ui_WifiLabel, lv_color_hex(0x8A8A8A), LV_PART_MAIN | LV_STATE_DEFAULT);
+    lv_obj_set_style_text_color(ui_WifiLabel, lv_color_hex(0x555555), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(ui_WifiLabel, &lv_font_montserrat_10, LV_PART_MAIN | LV_STATE_DEFAULT);
 
     lv_obj_add_event_cb(ui_Button1, ui_event_Button1_tabview_toggle, LV_EVENT_ALL, NULL);
@@ -381,11 +390,11 @@ static void refresh_wifi_label(void)
         char buf[64];
         snprintf(buf, sizeof(buf), "WiFi: %s", ssid);
         lv_label_set_text(g_wifi_ssid_label, buf);
-        lv_obj_set_style_text_color(g_wifi_ssid_label, lv_color_hex(0xCAD1D8),
+        lv_obj_set_style_text_color(g_wifi_ssid_label, lv_color_hex(0x335577),
                                     LV_PART_MAIN | LV_STATE_DEFAULT);
     } else {
         lv_label_set_text(g_wifi_ssid_label, "WiFi: not configured");
-        lv_obj_set_style_text_color(g_wifi_ssid_label, lv_color_hex(0x8A8A8A),
+        lv_obj_set_style_text_color(g_wifi_ssid_label, lv_color_hex(0x555555),
                                     LV_PART_MAIN | LV_STATE_DEFAULT);
     }
 }
@@ -438,7 +447,7 @@ static void populate_settings_tab(lv_obj_t * page)
         snprintf(pct, sizeof(pct), "%d%%", (b * 100) / 255);
         lv_label_set_text(g_brightness_value_label, pct);
         lv_obj_set_style_text_color(g_brightness_value_label,
-                                    lv_color_hex(0x8FB3D2),
+                                    lv_color_hex(0x446688),
                                     LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_set_style_text_font(g_brightness_value_label,
                                    &lv_font_montserrat_16, 0);
@@ -462,14 +471,20 @@ static void populate_settings_tab(lv_obj_t * page)
         refresh_wifi_label();
     }
 
-    /* ---- Row: WiFi action buttons ---------------------------------- */
+    /* ---- Row: WiFi action buttons ---------------------------------- *
+     * Configure : open the on-screen keyboard dialog and apply new creds.
+     * Forget    : drop credentials, persist a "stay disconnected" flag.
+     * Reset     : wipe NVS and reconnect using WIFI_SSID/PASS from
+     *             wifi_config.h. Useful when stale NVS state from
+     *             earlier testing prevents the device from joining the
+     *             compile-time network.                                  */
     {
         lv_obj_t * row = make_settings_row(page);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN,
                               LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
         lv_obj_t * btn_cfg = lv_button_create(row);
-        lv_obj_set_size(btn_cfg, 110, 32);
+        lv_obj_set_size(btn_cfg, 96, 32);
         lv_obj_add_event_cb(btn_cfg, wifi_configure_btn_cb,
                             LV_EVENT_CLICKED, NULL);
         lv_obj_t * cfg_lbl = lv_label_create(btn_cfg);
@@ -477,7 +492,7 @@ static void populate_settings_tab(lv_obj_t * page)
         lv_obj_center(cfg_lbl);
 
         lv_obj_t * btn_forget = lv_button_create(row);
-        lv_obj_set_size(btn_forget, 110, 32);
+        lv_obj_set_size(btn_forget, 84, 32);
         lv_obj_set_style_bg_color(btn_forget, lv_color_hex(0x6E2030),
                                   LV_PART_MAIN | LV_STATE_DEFAULT);
         lv_obj_add_event_cb(btn_forget, wifi_forget_btn_cb,
@@ -485,6 +500,16 @@ static void populate_settings_tab(lv_obj_t * page)
         lv_obj_t * forget_lbl = lv_label_create(btn_forget);
         lv_label_set_text(forget_lbl, "Forget");
         lv_obj_center(forget_lbl);
+
+        lv_obj_t * btn_reset = lv_button_create(row);
+        lv_obj_set_size(btn_reset, 84, 32);
+        lv_obj_set_style_bg_color(btn_reset, lv_color_hex(0x9E9E9E),
+                                  LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_add_event_cb(btn_reset, wifi_reset_btn_cb,
+                            LV_EVENT_CLICKED, NULL);
+        lv_obj_t * reset_lbl = lv_label_create(btn_reset);
+        lv_label_set_text(reset_lbl, "Reset");
+        lv_obj_center(reset_lbl);
     }
 }
 
@@ -497,7 +522,7 @@ static void create_wifi_modal(lv_obj_t * parent)
     lv_obj_set_align(g_wifi_modal, LV_ALIGN_CENTER);
     lv_obj_clear_flag(g_wifi_modal, LV_OBJ_FLAG_SCROLLABLE);
     /* Opaque so taps don't bleed through to widgets below. */
-    lv_obj_set_style_bg_color(g_wifi_modal, lv_color_hex(0x0D141B),
+    lv_obj_set_style_bg_color(g_wifi_modal, lv_color_hex(0xF8F8F8),
                               LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_opa(g_wifi_modal, LV_OPA_COVER,
                             LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -511,7 +536,7 @@ static void create_wifi_modal(lv_obj_t * parent)
     lv_obj_t * title = lv_label_create(g_wifi_modal);
     lv_label_set_text(title, "Configure WiFi");
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 6);
-    lv_obj_set_style_text_color(title, lv_color_hex(0xEAF6FF),
+    lv_obj_set_style_text_color(title, lv_color_hex(0x111111),
                                 LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
 
@@ -520,7 +545,7 @@ static void create_wifi_modal(lv_obj_t * parent)
     lv_label_set_text(ssid_lbl, "SSID");
     lv_obj_align(ssid_lbl, LV_ALIGN_TOP_LEFT, 12, 36);
     lv_obj_set_style_text_font(ssid_lbl, &lv_font_montserrat_10, 0);
-    lv_obj_set_style_text_color(ssid_lbl, lv_color_hex(0x8FB3D2), 0);
+    lv_obj_set_style_text_color(ssid_lbl, lv_color_hex(0x446688), 0);
 
     g_wifi_ssid_input = lv_textarea_create(g_wifi_modal);
     lv_obj_set_size(g_wifi_ssid_input, 456, 26);
@@ -536,7 +561,7 @@ static void create_wifi_modal(lv_obj_t * parent)
     lv_label_set_text(pass_lbl, "Password");
     lv_obj_align(pass_lbl, LV_ALIGN_TOP_LEFT, 12, 80);
     lv_obj_set_style_text_font(pass_lbl, &lv_font_montserrat_10, 0);
-    lv_obj_set_style_text_color(pass_lbl, lv_color_hex(0x8FB3D2), 0);
+    lv_obj_set_style_text_color(pass_lbl, lv_color_hex(0x446688), 0);
 
     g_wifi_pass_input = lv_textarea_create(g_wifi_modal);
     lv_obj_set_size(g_wifi_pass_input, 456, 26);
@@ -560,7 +585,7 @@ static void create_wifi_modal(lv_obj_t * parent)
     lv_obj_t * btn_cancel = lv_button_create(g_wifi_modal);
     lv_obj_set_size(btn_cancel, 90, 28);
     lv_obj_align(btn_cancel, LV_ALIGN_TOP_RIGHT, -12, 126);
-    lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x4D545B), 0);
+    lv_obj_set_style_bg_color(btn_cancel, lv_color_hex(0x9E9E9E), 0);
     lv_obj_add_event_cb(btn_cancel, wifi_cancel_btn_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_t * cancel_lbl = lv_label_create(btn_cancel);
     lv_label_set_text(cancel_lbl, "Cancel");
@@ -641,6 +666,18 @@ static void wifi_forget_btn_cb(lv_event_t * e)
 {
     (void)e;
     settings_wifi_forget();
+    refresh_wifi_label();
+}
+
+static void wifi_reset_btn_cb(lv_event_t * e)
+{
+    (void)e;
+    settings_wifi_reset_to_defaults();
+    /* The uploader task picks up the command within ~1.5 s and updates
+     * the active SSID; refresh the label after a short delay so the
+     * user sees the new value. The task may not have run yet, in which
+     * case the label briefly shows the old value — that's fine because
+     * the screen redraw on the next tab open will catch up.            */
     refresh_wifi_label();
 }
 
