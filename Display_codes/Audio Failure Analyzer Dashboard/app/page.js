@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import Link from 'next/link';
 import { useTheme } from './ThemeProvider';
 
 // ── Supabase (handles missing env vars gracefully) ────────────────────────────
@@ -241,6 +242,8 @@ export default function Dashboard() {
             <div className={`live-dot ${isLive ? 'on' : ''}`} />
             {isLive ? 'LIVE' : 'NO DATA'}
           </div>
+          <Link href="/spectrogram" className="spec-nav-link">Spectrogram ↗</Link>
+          <Link href="/info" className="spec-nav-link">About</Link>
           <button
             className="theme-toggle"
             onClick={toggleTheme}
