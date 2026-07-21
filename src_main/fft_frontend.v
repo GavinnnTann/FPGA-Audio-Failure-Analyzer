@@ -1,13 +1,15 @@
 // FFT Frontend - Windowing + FFT IP Interface + Magnitude Extraction
 //
 // Signal flow:
-// Decimated audio samples -> Hann window buffer -> FFT IP -> Magnitude calc -> Spectrogram storage
+// Decimated audio samples -> Hann window buffer -> FFT IP -> Magnitude calc
+//   -> Mel filterbank (256 linear bins -> 64 mel bands) -> Spectrogram storage
 //
 // This module manages:
 // 1. Sample buffering and windowing via fft_window_buffer
 // 2. FFT IP instantiation with AXI-Stream handshake
-// 3. Magnitude extraction and bin downsampling
-// 4. Spectrogram frame accumulation (64 bins per frame)
+// 3. Magnitude extraction (256 linear bins) and mel-band reduction
+// 4. Spectrogram frame accumulation (64 mel bins per frame), with temporal
+//    column decimation so each 64-column CNN image spans ~2 s of audio
 module fft_frontend #(
     parameter integer FFT_N = 512,
     parameter integer HOP_N = 64,
@@ -56,17 +58,34 @@ module fft_frontend #(
     reg                fft_cfg_tvalid;
     reg [7:0]          fft_cfg_tdata;
 
-    // Magnitude outputs
+    // Magnitude outputs (256 linear bins, pre-mel)
     wire [15:0]        mag_output;
     wire               mag_valid;
-    wire [5:0]         mag_bin_index;
+    wire [7:0]         mag_bin_index;
+
+    // Mel filterbank outputs (64 mel bands, replaces linear decimation)
+    wire [15:0]        mel_output;
+    wire               mel_valid;
+    wire [5:0]         mel_bin_idx;
 
     // Quantized 8-bit feature output
     wire [7:0]         feature8;
     wire               feature8_valid;
 
     // Delayed bin index for feature8 writes (quantizer adds 1-cycle pipeline)
-    reg [5:0]          mag_bin_index_d1;
+    reg [5:0]          mel_bin_idx_d1;
+
+    // Temporal column decimation: only 1 of every DECIM_COLS completed mel
+    // lines is promoted into the CNN's spectrogram image. Matches the CNN's
+    // training-time column spacing (~32 ms, from librosa hop_length=512 @
+    // 16 kHz) against the FPGA's native hop spacing (64 samples @ 46,875 Hz
+    // = ~1.365 ms): 32 / 1.365 ~= 23.4, rounded to 23. Without this, each
+    // 64-column image the CNN sees would span only ~87 ms of audio instead
+    // of the ~2.05 s of acoustic texture the autoencoder was trained to
+    // reconstruct — a much larger source of reconstruction-error mismatch
+    // than the frequency axis alone.
+    localparam integer DECIM_COLS = 23;
+    reg [4:0]          hop_decim_cnt;
 
     // Explicit FFT output bin index
     reg [9:0]          fft_out_bin_idx;
@@ -191,11 +210,24 @@ module fft_frontend #(
         .spec_bin_index (mag_bin_index)
     );
 
+    mel_filterbank #(
+        .COEFF_FILE ("mel_coeffs.mem")
+    ) mel_filterbank_inst (
+        .clk         (clk),
+        .rst_n       (rst_n),
+        .mag_in      (mag_output),
+        .mag_valid   (mag_valid),
+        .bin_idx_in  (mag_bin_index),
+        .mel_out     (mel_output),
+        .mel_bin_idx (mel_bin_idx),
+        .mel_valid   (mel_valid)
+    );
+
     fft_feature_quantizer feature_quantizer_inst (
         .clk           (clk),
         .rst_n         (rst_n),
-        .magnitude_in  (mag_output),
-        .magnitude_valid(mag_valid),
+        .magnitude_in  (mel_output),
+        .magnitude_valid(mel_valid),
         .feature_out   (feature8),
         .feature_valid (feature8_valid)
     );
@@ -206,7 +238,6 @@ module fft_frontend #(
 
     reg [15:0] spec_storage [0:63];
     reg [7:0]  feature8_storage [0:63];
-    reg [6:0]  line_count;
     reg [6:0]  feature_line_count;
 
     // Pack spectrogram storage into output bus
@@ -222,31 +253,43 @@ module fft_frontend #(
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             spec_frame_index <= 8'd0;
-            line_count   <= 7'd0;
             feature_line_count <= 7'd0;
             spec_frame_valid <= 1'b0;
-            mag_bin_index_d1 <= 6'd0;
+            mel_bin_idx_d1   <= 6'd0;
+            hop_decim_cnt    <= 5'd0;
         end else begin
             spec_frame_valid <= 1'b0;
 
-            // Track delayed bin index for feature8 writes.
-            if (mag_valid)
-                mag_bin_index_d1 <= mag_bin_index;
+            // Track delayed bin index for feature8 writes (quantizer's
+            // 1-cycle pipeline lags mel_valid by one clock).
+            if (mel_valid)
+                mel_bin_idx_d1 <= mel_bin_idx;
 
-            // Store 16-bit magnitude on mag_valid.
-            if (mag_valid) begin
-                spec_storage[mag_bin_index] <= mag_output;
-                line_count <= (line_count == 7'd63) ? 7'd0 : line_count + 7'd1;
-            end
+            // Store 16-bit mel-band magnitude on mel_valid. This is the
+            // "live" spectrogram (UART burst / ESP32 / PC viewer) and is
+            // updated every hop — undecimated, stays real-time responsive.
+            if (mel_valid)
+                spec_storage[mel_bin_idx] <= mel_output;
 
-            // Store 8-bit feature using delayed index; derive frame-valid from feature count.
+            // Store 8-bit feature using delayed index; derive frame-valid
+            // from feature count. Only every DECIM_COLS-th completed line
+            // is promoted to the CNN's spectrogram image (spec_frame_valid)
+            // so a full 64-column frame spans ~2 s of audio, matching the
+            // training-time column spacing instead of the FPGA's native
+            // ~87 ms hop-to-hop rate.
             if (feature8_valid) begin
-                feature8_storage[mag_bin_index_d1] <= feature8;
+                feature8_storage[mel_bin_idx_d1] <= feature8;
 
                 if (feature_line_count == 7'd63) begin
                     feature_line_count <= 7'd0;
-                    spec_frame_index <= spec_frame_index + 8'd1;
-                    spec_frame_valid <= 1'b1;
+
+                    if (hop_decim_cnt == DECIM_COLS - 1) begin
+                        hop_decim_cnt    <= 5'd0;
+                        spec_frame_index <= spec_frame_index + 8'd1;
+                        spec_frame_valid <= 1'b1;
+                    end else begin
+                        hop_decim_cnt <= hop_decim_cnt + 5'd1;
+                    end
                 end else begin
                     feature_line_count <= feature_line_count + 7'd1;
                 end

@@ -6,6 +6,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <atomic>
 #include <cstring>
 
 namespace wifi_uploader {
@@ -53,6 +54,13 @@ portMUX_TYPE g_pending_mux = portMUX_INITIALIZER_UNLOCKED;
 // (uploader task); readers tolerate a torn snapshot.
 char g_active_ssid[kSsidCap] = {0};
 portMUX_TYPE g_active_mux = portMUX_INITIALIZER_UNLOCKED;
+
+// Cached WiFi connected state. Written exclusively from Core 0 (uploader_task)
+// so WiFi driver calls only happen on the radio core. Core 1 reads this atomic
+// instead of calling WiFi.status() directly — calling WiFi.status() from Core 1
+// triggers an IPC spin-wait that can deadlock against the WiFi internal lock
+// held during TLS handshakes, preventing the WDT from being reset for 8+ s.
+static std::atomic<bool> g_wifi_connected_cache{false};
 
 // ---- NVS helpers ------------------------------------------------------------
 
@@ -255,18 +263,24 @@ void uploader_task(void* /*arg*/) {
   vTaskDelay(pdMS_TO_TICKS(kBootDelayMs));
   apply_initial_credentials();
 
+  // Persistent so the TLS session survives between uploads — avoids repeated BIGNUM handshakes.
+  WiFiClientSecure tls;
+  tls.setInsecure();
+  tls.setTimeout(kHttpTimeoutMs / 1000U);
+
   while (true) {
-    // Always check for credential changes before touching the queue so a
-    // pending Apply / Forget is honoured promptly.
     process_pending_command();
+
+    // Refresh the cache from Core 0 so Core 1 never needs to call WiFi.status().
+    g_wifi_connected_cache.store(
+        WiFi.status() == WL_CONNECTED, std::memory_order_relaxed);
 
     Snapshot snap{};
     if (xQueueReceive(snap_queue, &snap, pdMS_TO_TICKS(kCommandPollMs)) != pdTRUE) {
       continue;  // timeout — go round and re-check pending command.
     }
 
-    // Drain any backlog that built up during a slow HTTP round-trip;
-    // keep only the most recent snapshot so the dashboard shows live data.
+    // Drain any backlog that built up during a slow HTTP round-trip.
     {
       Snapshot newer{};
       while (xQueueReceive(snap_queue, &newer, 0) == pdTRUE) {
@@ -275,31 +289,42 @@ void uploader_task(void* /*arg*/) {
     }
 
     if (!ensure_wifi()) {
+      tls.stop();  // Drop stale connection on WiFi loss.
       continue;
+    }
+
+    // Heap guard only applies when a new TLS handshake is needed.
+    // Reused sessions skip this entirely — no BIGNUM, no large allocation.
+    if (!tls.connected()) {
+      const uint32_t max_block = ESP.getMaxAllocHeap();
+      Serial.printf("[wifi_up] new TLS session, heap max_block=%lu\n",
+                    static_cast<unsigned long>(max_block));
+      if (max_block < 45000U) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        continue;
+      }
     }
 
     char body[256];
     build_json(body, sizeof(body), snap);
 
-    const uint32_t max_block = ESP.getMaxAllocHeap();
-    if (max_block < 40000U) {
-      vTaskDelay(pdMS_TO_TICKS(2000));
-      continue;
-    }
-
-    WiFiClientSecure tls;
-    HTTPClient       http;
-    tls.setInsecure();
-
+    HTTPClient http;
     if (http.begin(tls, kUrl)) {
       http.addHeader("Content-Type",  "application/json");
       http.addHeader("apikey",        SUPABASE_KEY);
       http.addHeader("Authorization", "Bearer " SUPABASE_KEY);
       http.addHeader("Prefer",        "return=minimal");
       http.setTimeout(kHttpTimeoutMs);
-      const int code = http.POST(String(body));
-      (void)code;
+      http.setReuse(true);  // Keep tls alive after http.end() so next POST reuses the session.
+      const int code = http.POST(reinterpret_cast<uint8_t*>(body), strlen(body));
+      if (code <= 0 || code >= 300) {
+        Serial.printf("[wifi_up] POST %s  code=%d\n", kUrl, code);
+        tls.stop();  // Force fresh handshake next iteration.
+      }
       http.end();
+    } else {
+      Serial.printf("[wifi_up] http.begin() failed for %s\n", kUrl);
+      tls.stop();
     }
   }
 }
@@ -331,7 +356,8 @@ void push(const Snapshot& snap) {
 }
 
 bool is_connected() {
-  return WiFi.status() == WL_CONNECTED;
+  // Read the Core-0-maintained cache — never call WiFi.status() from Core 1.
+  return g_wifi_connected_cache.load(std::memory_order_relaxed);
 }
 
 bool current_ssid(char* out, size_t cap) {

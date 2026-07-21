@@ -1,6 +1,5 @@
 #include "settings.h"
 
-#include "failure_dots.h"
 #include "hardware.h"
 #include "wifi_uploader.h"
 
@@ -56,7 +55,7 @@ void settings_wifi_reset_to_defaults(void) {
 }
 
 void settings_set_dot_overlay(lv_obj_t* overlay) {
-  failure_dots::set_overlay(overlay);
+  (void)overlay;  // failure_dots removed
 }
 
 }  // extern "C"

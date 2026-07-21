@@ -32,9 +32,10 @@ flowchart LR
 
     FFTIN --> WIN[fft_window_buffer.v<br/>Hann 512, hop 64]
     WIN --> FFTIP[Xilinx xfft_1 IP<br/>512-pt streaming FFT]
-    FFTIP --> MAG[fft_magnitude.v<br/>Alphamax+Betamax]
-    MAG --> QTZ[fft_feature_quantizer.v<br/>16-bit to 8-bit log-like]
-    QTZ --> PP[spectrogram_pingpong.v<br/>64x64 feature frames]
+    FFTIP --> MAG[fft_magnitude.v<br/>Alphamax+Betamax, 256 bins]
+    MAG --> MEL[mel_filterbank.v<br/>256 linear bins to 64 mel bands]
+    MEL --> QTZ[fft_feature_quantizer.v<br/>16-bit to 8-bit log-like]
+    QTZ --> PP[spectrogram_pingpong.v<br/>64x64 feature frames, 23:1 temporal decimation]
 
     PP --> FEED[cnn_axi_feeder.v]
     FEED --> CNN[myproject CNN IP<br/>hls4ml, 100 MHz]
@@ -88,10 +89,12 @@ flowchart LR
 | FFT input path (`raw_s16`) | 12 MHz | 46,875 samples/s | 46,875 samples/s | Full-band path (no decimation) |
 | `fft_window_buffer.v` (`N=512`, `hop=64`) | 12 MHz | 46,875 samples/s | FFT-frame hop rate **732.42 hops/s** | Hop period = `64/46875 = 1.365 ms` |
 | `xfft_1` (`fft_frontend.v`) | 12 MHz (aclk wired to `clk`) | Streaming 24-bit samples | Complex bins per frame | 512-point fixed-point FFT, natural-order output |
-| `fft_magnitude.v` + downsample | 12 MHz | 512 bins/frame | 64 bins/frame (`mag_valid`) | Keeps bins `<256`, every 4th bin |
-| `spec_frame_valid` (in `fft_frontend.v`) | 12 MHz | 64 downsampled bins/frame | **732.42 lines/s** | One 64-bin line per FFT hop |
-| `spectrogram_pingpong.v` line write | 12 MHz write clock | 1 line/event | 64-byte line in 64 cycles | `64/12e6 = 5.33 us` line write time |
-| `spectrogram_pingpong.v` full frame complete | 12 MHz write clock | 64 lines/frame | **11.44 frames/s** | `732.42/64`; `frame_ready` only pulses when CNN idle |
+| `fft_magnitude.v` | 12 MHz | 512 bins/frame | 256 bins/frame (`mag_valid`) | Keeps bins `<256` (real-input half-spectrum); no further decimation |
+| `mel_filterbank.v` | 12 MHz | 256 linear bins/frame | 64 mel bands/frame (`mel_valid`) | Slaney mel scale, 0-8 kHz, matches CNN training data |
+| `spec_frame_valid` (mel line, pre-decimation, in `fft_frontend.v`) | 12 MHz | 64 mel bins/frame | **732.42 lines/s** (raw) | One 64-bin mel line per FFT hop, before temporal decimation |
+| Temporal column decimator (`DECIM_COLS=23`, in `fft_frontend.v`) | 12 MHz | 732.42 lines/s | **31.84 lines/s** promoted | 1 of every 23 lines committed to the CNN image; live UART/display spectrogram bypasses this and stays at 732.42 lines/s |
+| `spectrogram_pingpong.v` line write | 12 MHz write clock | 1 promoted line/event | 64-byte line in 64 cycles | `64/12e6 = 5.33 us` line write time |
+| `spectrogram_pingpong.v` full frame complete | 12 MHz write clock | 64 promoted lines/frame | **~0.50 frames/s** | `31.84/64`; each frame spans ~2.0 s of audio (training-matched); `frame_ready` only pulses when CNN idle |
 | `cnn_wrapper` + CNN IP + scorer | 100 MHz | 64x64 frame (4096 px) | Score-ready pulse (`cnn_done`) | Crosses from 12 MHz domain via synchronized toggle |
 | CNN inference latency | 100 MHz | 1 frame | ~**1.786 ms/frame** | ~178,600 cycles (model-specific measured value) |
 | UART RMS window cadence (`WINDOW_SAMPLES=391`) | 12 MHz | 7,812.5 samples/s | ~**50.05 ms/frame** | `391/7812.5`; drives telemetry packet cadence |
@@ -137,17 +140,24 @@ From constraints/recorder.xdc:
 3. FFT computation
 - xfft_1 IP computes complex FFT bins through AXI-Stream.
 
-4. Magnitude and downsampling
+4. Magnitude extraction
 - fft_magnitude.v computes approximate magnitude from real/imag.
 - Uses Alphamax+Betamax approximation.
-- Keeps first 256 bins and selects every 4th bin -> 64 bins.
+- Keeps all 256 usable linear bins (real-input half-spectrum); no decimation here.
 
-5. Feature quantization
-- fft_feature_quantizer.v converts 16-bit magnitude to compact 8-bit feature.
+5. Mel filterbank
+- mel_filterbank.v warps the 256 linear bins into 64 mel-spaced bands (Slaney scale, 0-8 kHz).
+- Matches the frequency axis the CNN autoencoder was trained on (librosa mel spectrogram in submission/src/audio.ipynb).
+- Coefficients generated offline by scripts/gen_mel_coeffs.py into src_main/mel_coeffs.mem.
 
-6. Spectrogram buffering
-- spectrogram_pingpong.v stores 64x64 feature maps.
+6. Feature quantization
+- fft_feature_quantizer.v converts 16-bit mel-band magnitude to compact 8-bit feature.
+
+7. Temporal decimation and spectrogram buffering
+- fft_frontend.v promotes only 1 of every 23 completed mel lines to the CNN's image buffer, so a full 64-column image spans ~2.0 s of audio (matching the CNN's training-time column spacing) instead of the FFT's native ~87 ms hop-to-hop rate.
+- spectrogram_pingpong.v stores the promoted 64x64 feature maps.
 - Supports overlap between producer (FFT path) and consumer (CNN path).
+- The live UART/display spectrogram (spec_bin_magnitude) is unaffected by the decimation and stays real-time (~11.4 Hz refresh).
 
 ## 4.2 CNN Path
 
@@ -166,7 +176,7 @@ From constraints/recorder.xdc:
 Throughput interpretation:
 
 - CNN compute capacity is significantly faster than full-frame generation.
-- Effective end-to-end CNN update rate is bounded mainly by spectrogram frame assembly in ping-pong buffering and frame handoff logic.
+- Effective end-to-end CNN update rate is bounded mainly by spectrogram frame assembly in ping-pong buffering and frame handoff logic — now further paced by the temporal column decimator (~2.0 s/frame, ~0.5 Hz) so each image matches the CNN's training-time temporal span. CNN inference (~1.786 ms) remains a trivial fraction of that period.
 
 ## 4.3 Packetization
 
@@ -511,9 +521,9 @@ Clocking note for this integration:
 1. Collect 512-sample window with Hann weighting.
 2. Stream into xfft_1 with frame end signaled by TLAST.
 3. Receive complex bins in natural order.
-4. Compute magnitude approximation.
-5. Retain only physically meaningful first half-spectrum and decimate to 64 bins.
-6. Deliver packed 64-bin outputs for telemetry and downstream CNN feature generation.
+4. Compute magnitude approximation, retaining the physically meaningful first half-spectrum (256 bins).
+5. Warp the 256 linear bins through a 64-band mel filterbank (0-8 kHz, Slaney scale).
+6. Deliver packed 64-bin mel outputs for telemetry and downstream CNN feature generation.
 
 ## 7.3 Why This FFT Configuration Fits the Project
 

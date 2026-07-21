@@ -4,7 +4,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include "failure_dots.h"
 #include "ui.h"
 #include "wifi_uploader.h"
 #include "screens/ui_Screen4.h"
@@ -51,7 +50,6 @@ uint8_t spark_samples[kSparklineSamples] = {0};
 uint16_t spark_head = 0;
 uint16_t spark_count = 0;
 lv_point_precise_t spark_points[kSparklineSamples] = {};
-uint32_t last_dot_total_sec = 0;
 uint32_t last_sparkline_rebuild_ms = 0;
 constexpr uint32_t kSparklineRebuildIntervalMs = 250;
 bool sparkline_dirty = false;
@@ -296,8 +294,6 @@ void initialize(uint32_t boot_ms) {
   cached_anomaly = false;
   cached_fpga_active = false;
   cached_cnn_ran = false;
-  last_dot_total_sec = 0;
-
   lv_arc_set_range(ui_Arc1, 0, 359);
   lv_arc_set_value(ui_Arc1, 0);
   lv_arc_set_bg_angles(ui_Arc1, 0, 360);
@@ -310,10 +306,6 @@ void initialize(uint32_t boot_ms) {
 
   create_center_sparkline();
   create_overlay_labels();
-  failure_dots::initialize(ui_Screen2, ui_Arc1);
-  // The TabView slides over Screen2 and is the only widget that needs to
-  // win the z-order fight against newly-created failure dots.
-  failure_dots::set_overlay(ui_TabView2);
 }
 
 void set_stale_ui(bool stale) {
@@ -401,7 +393,6 @@ void update_uptime_label(uint32_t now_ms, uint32_t boot_ms) {
   lv_label_set_text(ui_UptimeLabel, uptime);
 
   lv_arc_set_value(ui_Arc1, static_cast<int>(total_sec % 360U));
-  failure_dots::refresh(total_sec);
 }
 
 void update_runtime_overlay(uint32_t now_ms, const RuntimeStats& stats) {
@@ -589,13 +580,7 @@ void on_valid_packet(
     telemetry.last_anomaly_ms = now_ms;
     push_anomaly_event(now_ms);
 
-    if (!skip_ui) {
-      const uint32_t total_sec = (now_ms - boot_ms) / 1000U;
-      if (total_sec != last_dot_total_sec) {
-        failure_dots::add_dot(total_sec, amplitude_to_severity(median_rms));
-        last_dot_total_sec = total_sec;
-      }
-    }
+    (void)boot_ms;
   }
   telemetry.last_anomaly = anomaly;
 }

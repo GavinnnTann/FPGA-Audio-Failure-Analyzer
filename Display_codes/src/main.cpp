@@ -50,7 +50,7 @@ constexpr uint32_t kUartIdleWakeMs = 50;
 // recreation) but short enough to make the device feel snappy when it does
 // recover. The WiFi task is intentionally NOT monitored — TLS handshakes
 // can legitimately take 5-6 s on flaky networks.
-constexpr uint32_t kWdtTimeoutSec = 8;
+constexpr uint32_t kWdtTimeoutSec = 15;
 
 HardwareSerial fpga_uart(2);
 void* draw_buf_1 = nullptr;
@@ -172,13 +172,14 @@ void uart_rx_task(void* /*arg*/) {
   uint8_t last_seq_local = 0;
   uint32_t last_valid_ms = 0;
 
-  // Self-register with the Task Watchdog. The reset call inside the loop
-  // proves liveness; if the parser ever wedges on a syscall the WDT will
-  // fire and the system reboots cleanly.
-  esp_task_wdt_add(NULL);
+  // NOTE: This task is intentionally NOT registered with the Task Watchdog.
+  // uart_rx_task and the WiFi/TLS stack both run on Core 0. The WiFi tasks
+  // run at FreeRTOS priority 23 and can starve this task (priority 4) for
+  // the duration of a TLS handshake (typically 5–10 s). Subscribing to the
+  // WDT would cause the watchdog to fire during every upload cycle.
+  // Liveness of Core 1 (loopTask) is still monitored by the WDT.
 
   for (;;) {
-    esp_task_wdt_reset();
 
     // Block until the UART event task signals fresh data (interrupt path)
     // or the wake-tick fires so we can publish updated max_rx_backlog.
@@ -487,6 +488,10 @@ void setup() {
 
   ui_init();
 
+  // Feed the WDT from inside lv_timer_handler() so a burst of timer callbacks
+  // or a transient stall during the pre-render phase can't exhaust the timeout.
+  lv_timer_create([](lv_timer_t*) { esp_task_wdt_reset(); }, 3000, nullptr);
+
   analogWrite(hardware::VibratorPin, 255);
   delay(500);
   analogWrite(hardware::VibratorPin, 0);
@@ -515,6 +520,20 @@ void loop() {
   esp_task_wdt_reset();
 
   const uint32_t now = millis();
+
+  // Hang diagnosis: track worst-case lv_timer_handler() latency in each 5 s
+  // window. "lv_max" near 0 means the render is fast and the hang is
+  // elsewhere; large values (>200 ms) point to the render path as the culprit.
+  // Remove once the WDT hang is resolved.
+  static uint32_t last_diag_ms = 0;
+  static uint32_t lv_max_ms = 0;
+  if (now - last_diag_ms >= 5000U) {
+    last_diag_ms = now;
+    Serial.printf("[loop] t=%lus lv_max=%lums\n",
+                  static_cast<unsigned long>(now / 1000UL),
+                  static_cast<unsigned long>(lv_max_ms));
+    lv_max_ms = 0;
+  }
   screen2_telemetry::TelemetryData& telemetry = screen2_telemetry::data();
 
   const uint32_t lv_elapsed = now - lv_last_tick_ms;
@@ -573,16 +592,19 @@ void loop() {
   } else {
     screen2_telemetry::tick(now);
     screen2_telemetry::update_smoothed_bar(now);
+    esp_task_wdt_reset();
 
     screen2_telemetry::RuntimeStats overlay_stats;
     overlay_stats.seq_drop = g_rx_stats.seq_drop.load(std::memory_order_relaxed);
     overlay_stats.checksum_fail = g_rx_stats.checksum_fail.load(std::memory_order_relaxed);
     overlay_stats.seq_reorder = g_rx_stats.seq_reorder.load(std::memory_order_relaxed);
     screen2_telemetry::update_runtime_overlay(now, overlay_stats);
+    esp_task_wdt_reset();
 
     update_uart2_stats_monitor(now, telemetry);
 
     if (now - last_ui_tick_ms >= kUiUpdateIntervalMs) {
+      esp_task_wdt_reset();
       screen2_telemetry::update_uptime_label(now, boot_ms);
       last_ui_tick_ms = now;
     }
@@ -605,7 +627,21 @@ void loop() {
   const bool buzz = settings_vibration_enabled() && (now < telemetry.vibe_until_ms);
   digitalWrite(hardware::VibratorPin, buzz ? HIGH : LOW);
 
+  // Reset WDT immediately before the render pass so even a long multi-tile
+  // Screen2 render starts with a fresh window. flush_cb also resets per-tile.
+  esp_task_wdt_reset();
+  const uint32_t t0 = millis();
   const uint32_t ms_to_next = lv_timer_handler();
+  const uint32_t lv_took = millis() - t0;
+  if (lv_took > lv_max_ms) lv_max_ms = lv_took;
+  // Warn immediately when a single lv_timer_handler() call takes >200 ms
+  // (normal is <100 ms). Rate-limited to 1/s to avoid flooding the monitor.
+  static uint32_t last_lv_slow_ms = 0;
+  if (lv_took > 200U && now - last_lv_slow_ms > 1000U) {
+    last_lv_slow_ms = now;
+    Serial.printf("[lv] slow %lums\n", static_cast<unsigned long>(lv_took));
+  }
+
   const uint32_t sleep_ms = (ms_to_next > 1U) ? 1U : ms_to_next;
   delay(sleep_ms);
 }

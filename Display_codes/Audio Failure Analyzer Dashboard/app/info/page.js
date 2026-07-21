@@ -71,7 +71,6 @@ export default function InfoPage() {
         </div>
         <div className="header-right">
           <Link href="/" className="spec-nav-link">← Dashboard</Link>
-          <Link href="/spectrogram" className="spec-nav-link">Spectrogram</Link>
           <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
             {isDark ? '☀️ Light' : '🌙 Dark'}
           </button>
@@ -131,20 +130,20 @@ export default function InfoPage() {
         {/* ── What This Webapp Does ─────────────────────────────────────── */}
         <Section title="What This Webapp Does" />
         <Body>
-          The webapp has two main views, accessible from the navigation links in the header:
+          The webapp is a single combined view with two panels, accessible at <strong>/</strong>:
         </Body>
         <Bullet>
-          <strong>Dashboard ( / )</strong> — Live telemetry from the ESP32. Shows current RMS
-          amplitude, classification result, anomaly rate over the session, FPGA and CNN status
-          flags, and a scrolling RMS timeline with anomaly events marked in red. All data arrives
-          via Supabase Realtime — any number of devices can watch simultaneously.
+          <strong>Dashboard (left panel)</strong> — Live telemetry from the ESP32. Shows current
+          RMS amplitude, classification result, anomaly rate over the session, FPGA and CNN status
+          flags, and a scrolling RMS timeline with anomaly events marked in red. When FPGA is
+          connected via USB the dashboard updates in real time without WiFi lag.
         </Bullet>
         <Bullet>
-          <strong>Spectrogram ( /spectrogram )</strong> — Real-time 64-bin waterfall and spectrum
-          bar chart. On Chrome or Edge desktop, connect the FPGA directly via USB — the browser
-          reads the serial port and renders the waterfall locally. The data is simultaneously
-          broadcast over Supabase Realtime so phones and other devices can watch as viewers without
-          needing a USB connection.
+          <strong>Spectrogram (right panel)</strong> — Real-time 64-bin waterfall and spectrum bar
+          chart driven by the CNN classification card. On Chrome or Edge desktop, click{' '}
+          <strong>Connect USB</strong> in the header to stream directly from the FPGA. The data is
+          simultaneously broadcast over Supabase Realtime so phones and other devices can watch as
+          viewers without a USB connection.
         </Bullet>
 
         <Divider />

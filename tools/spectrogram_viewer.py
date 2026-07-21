@@ -7,7 +7,8 @@ Bottom bar:  Real-time comparison metrics (cosine similarity, correlation,
              RMSE) and normalized spectrum overlay.
 
 Both panels show a current-spectrum bar chart (log2 frequency scale)
-and a scrolling waterfall spectrogram on the same 0-23.4 kHz axis.
+and a scrolling waterfall spectrogram on the same mel-warped 0-8 kHz axis
+(64 mel bands, matching the CNN's training data — see MEL_WEIGHTS below).
 
 Protocol (from recorder_top.v):
   RMS frame (8 bytes):  AA 55 result rms flags seq metric checksum
@@ -48,14 +49,64 @@ WATERFALL_ROWS = 128           # number of time-rows kept in waterfall
 SPEC_SYNC = (0xDD, 0x77)
 RMS_SYNC  = (0xAA, 0x55)
 
-# Frequency axis: 64 bins spanning 0 to ~23.4 kHz (46.875 kHz / 2)
-# Only first 256 of 512 FFT bins used (real FFT), downsampled by 4 -> 64 bins
 SAMPLE_RATE = 46875.0
 NYQUIST = SAMPLE_RATE / 2.0
 FFT_N = 512
 BIN_SPACING = SAMPLE_RATE / FFT_N      # ~91.6 Hz per raw FFT bin
-# Output bin k maps to FFT bin k*4, so center freq = k * 4 * BIN_SPACING
-FREQ_AXIS = np.array([k * 4 * BIN_SPACING for k in range(NUM_BINS)])  # Hz
+
+# ---------------------------------------------------------------------------
+# Mel filterbank (must match src_main/mel_filterbank.v / scripts/gen_mel_coeffs.py)
+#
+# The FPGA no longer sends a linearly-downsampled spectrum — fft_magnitude.v
+# passes all 256 usable linear bins to mel_filterbank.v, which warps them
+# into 64 mel-spaced bands (Slaney scale, 0-8000 Hz, matching the CNN's
+# training data in submission/src/audio.ipynb). Both the live UART spectrum
+# and this file's WaveformSimulator must use the identical mel mapping for
+# the live-vs-simulated comparison metrics (cosine similarity, correlation,
+# RMSE) to mean anything.
+# ---------------------------------------------------------------------------
+MEL_N_MELS = NUM_BINS
+MEL_FMIN = 0.0
+MEL_FMAX = 8000.0   # matches training's 16 kHz sample rate / 2
+
+
+def _hz_to_mel(f):
+    f_sp = 200.0 / 3.0
+    mel = f / f_sp
+    min_log_hz = 1000.0
+    min_log_mel = min_log_hz / f_sp
+    logstep = np.log(6.4) / 27.0
+    return np.where(f >= min_log_hz, min_log_mel + np.log(np.maximum(f, 1e-9) / min_log_hz) / logstep, mel)
+
+
+def _mel_to_hz(mel):
+    f_sp = 200.0 / 3.0
+    freq = f_sp * mel
+    min_log_hz = 1000.0
+    min_log_mel = min_log_hz / f_sp
+    logstep = np.log(6.4) / 27.0
+    return np.where(mel >= min_log_mel, min_log_hz * np.exp(logstep * (mel - min_log_mel)), freq)
+
+
+def _build_mel_filterbank(n_bins=256, sample_rate=SAMPLE_RATE, fft_n=FFT_N,
+                           n_mels=MEL_N_MELS, fmin=MEL_FMIN, fmax=MEL_FMAX):
+    """Unnormalized (peak=1.0) triangular mel filterbank, matching
+    scripts/gen_mel_coeffs.py exactly. Returns (weights[n_bins, n_mels], band_centers_hz)."""
+    bin_freqs = np.arange(n_bins) * (sample_rate / fft_n)
+    mel_pts = np.linspace(_hz_to_mel(fmin), _hz_to_mel(fmax), n_mels + 2)
+    hz_pts = _mel_to_hz(mel_pts)
+
+    weights = np.zeros((n_bins, n_mels), dtype=np.float64)
+    for m in range(n_mels):
+        lower, center, upper = hz_pts[m], hz_pts[m + 1], hz_pts[m + 2]
+        rising = (bin_freqs - lower) / max(center - lower, 1e-9)
+        falling = (upper - bin_freqs) / max(upper - center, 1e-9)
+        tri = np.maximum(0.0, np.minimum(rising, falling))
+        weights[:, m] = tri
+    return weights, hz_pts[1:-1]
+
+
+MEL_WEIGHTS, FREQ_AXIS = _build_mel_filterbank()  # FREQ_AXIS = mel band center frequencies (Hz)
 
 MAX_LOG_LINES = 500
 SIMILARITY_HISTORY = 200       # number of past similarity values to plot
@@ -308,7 +359,7 @@ class WaveformSimulator:
 
     Pipeline: time-domain samples at 46 875 Hz -> Hann window (512 pts)
               -> 512-pt FFT -> magnitude of first 256 bins
-              -> every-4th downsample -> 64 output bins (0-23.4 kHz).
+              -> mel filterbank (MEL_WEIGHTS, 0-8000 Hz) -> 64 mel bands.
     """
 
     def __init__(self):
@@ -355,9 +406,9 @@ class WaveformSimulator:
         if self.noise_enabled:
             sig += np.random.normal(0.0, self.noise_amplitude * 32767.0, FFT_N)
 
-        # Hann window -> FFT -> magnitude of first 256 bins -> every-4th downsample
-        fft_mag = np.abs(np.fft.fft(sig * self._hann))
-        self.spectrum = fft_mag[::4][:NUM_BINS]
+        # Hann window -> FFT -> magnitude of first 256 bins -> mel filterbank
+        fft_mag = np.abs(np.fft.fft(sig * self._hann))[:256]
+        self.spectrum = fft_mag @ MEL_WEIGHTS
 
         self.waterfall = np.roll(self.waterfall, 1, axis=0)
         self.waterfall[0, :] = self.spectrum
@@ -625,17 +676,17 @@ class SpectrogramApp:
         ax_bar = fig.add_subplot(2, 1, 1)
         ax_bar.set_facecolor("#1e1e1e")
         ax_bar.set_title(
-            f"{title_prefix} - Spectrum (0-23.4 kHz)",
+            f"{title_prefix} - Mel Spectrum (0-{MEL_FMAX/1000:.0f} kHz)",
             color="white", fontsize=9,
         )
-        ax_bar.set_xlabel("Frequency (Hz) - log2 scale", color="white", fontsize=7)
+        ax_bar.set_xlabel("Mel band center frequency (Hz) - log2 scale", color="white", fontsize=7)
         ax_bar.set_ylabel("Magnitude", color="white", fontsize=7)
         ax_bar.set_xscale("log", base=2)
         ax_bar.tick_params(colors="white", labelsize=6)
 
         bar_freqs = FREQ_AXIS.copy()
         bar_freqs[0] = max(bar_freqs[0], bar_freqs[1] / 2)
-        bar_widths = np.diff(np.append(bar_freqs, NYQUIST)) * 0.8
+        bar_widths = np.diff(np.append(bar_freqs, MEL_FMAX)) * 0.8
         bars = ax_bar.bar(
             bar_freqs, np.zeros(NUM_BINS), width=bar_widths,
             color=bar_color, edgecolor=edge_color, align="edge",

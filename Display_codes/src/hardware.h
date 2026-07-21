@@ -31,10 +31,10 @@ constexpr int TouchIntPin = 34;
 // backlight is hard-wired to VCC and the slider should be a no-op.
 constexpr int BacklightPin = -1;
 constexpr uint8_t BacklightDefault = 255;
-// 1/12 screen per buffer (2 buffers = ~51 KB total DMA).
-// Reduced from 1/4 to keep enough contiguous heap free for TLS (~40 KB).
+// 1/30 screen per buffer (~10 KB). Reduced from 1/20 to free ~5 KB for the
+// mbedTLS BIGNUM allocations during the first TLS handshake at boot.
 constexpr size_t DrawBufSize =
-    (TftHorRes * TftVerRes / 12U * (LV_COLOR_DEPTH / 8U));
+    (TftHorRes * TftVerRes / 30U * (LV_COLOR_DEPTH / 8U));
 
 extern TFT_eSPI tft;
 extern Adafruit_FT6206 ts;

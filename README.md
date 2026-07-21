@@ -62,9 +62,12 @@ INMP441 (I2S Mic, 46.875 kHz)
        │
        512-point FFT (Xilinx FFT v9.1 IP)
        │
-       Magnitude (Alphamax+Betamax) → 64 bins (0–23.4 kHz)
+       Magnitude (Alphamax+Betamax) → 256 linear bins
        │
-       8-bit log₂ companding → 64×64 spectrogram buffer (BRAM)
+       Mel filterbank (Slaney scale, 0–8 kHz) → 64 mel bands
+       │
+       8-bit log₂ companding → 64×64 spectrogram buffer (BRAM, temporally
+       decimated 23:1 so each image spans ~2 s, matching CNN training data)
        │
        CNN Autoencoder (hls4ml, 100 MHz, 15-layer)
        │
@@ -100,27 +103,27 @@ End-to-end pipeline — audio capture → FFT → spectrogram → CNN inference 
 ### 1. Audio Acquisition
 Digital audio captured via I2S from INMP441 at 46.875 kHz, 24-bit.
 
-### 2. Time-Frequency Representation (FFT)
+### 2. Time-Frequency Representation (FFT + Mel Filterbank)
 - **FFT core:** Xilinx FFT v9.1 IP (512-point, pipelined streaming I/O)
 - **Window:** Hann (512 coefficients, Q1.15 fixed-point, DSP48-pipelined multiply)
-- **Hop:** 64 samples overlap → ~20 frames/second
+- **Hop:** 64 samples overlap → ~732 lines/second raw hop rate
 - **Dual-path:**
   - RMS path: ÷6 decimation → amplitude metering
   - FFT path: Full-rate for maximum bandwidth
-- **Output:** 64-bin spectrogram (first 256 of 512 bins, every 4th → 64 bins)
-  - Frequency range: 0–23.4 kHz
-  - Bin spacing: ~366 Hz
-  - Magnitude: Alphamax+Betamax approximation
-  - 8-bit feature quantization: log₂ companding `{lz[3:0], norm[14:11]}` (monotonic 0–255)
+- **Magnitude:** Alphamax+Betamax approximation, all 256 usable linear bins (first half of 512, real-input half-spectrum)
+- **Mel filterbank:** 256 linear bins → 64 mel-spaced bands (Slaney scale, 0–8 kHz), matching the frequency axis the CNN was trained on (`submission/src/audio.ipynb`'s `librosa.feature.melspectrogram`). Bins above ~8 kHz carry zero weight by construction. See [src_main/mel_filterbank.v](src_main/mel_filterbank.v) and [scripts/gen_mel_coeffs.py](scripts/gen_mel_coeffs.py).
+- **8-bit feature quantization:** log₂ companding `{lz[3:0], norm[14:11]}` (monotonic 0–255), applied to the mel-band output
+- **Temporal decimation:** only 1 of every 23 mel lines is committed to the CNN's spectrogram image, so each 64-column image spans ~2.0 s of audio — matching the training data's column spacing (~32 ms/column × 64) instead of the FFT's native ~87 ms hop-to-hop rate. The live UART/display spectrogram is unaffected and stays undecimated (~11.4 Hz refresh).
 
 ### 3. CNN Inference (On FPGA)
 - **Architecture:** 15-layer convolutional autoencoder (hls4ml generated)
-- **Input:** 64×64×1 spectrogram (8-bit unsigned, streamed via AXI-Stream)
+- **Input:** 64×64×1 mel spectrogram (8-bit unsigned, streamed via AXI-Stream)
 - **Output:** Reconstructed 64×64×1 → MAE compared against input
 - **Clock:** 100 MHz (dedicated domain via MMCM)
 - **Latency:** ~178,600 cycles = 1.786 ms per inference
 - **Anomaly threshold:** MAE >= 26/255 → ABNORMAL
 - **Double-buffered** via ping-pong BRAM so FFT writes don't stall CNN reads
+- **Update rate:** ~0.5 Hz (once per ~2 s assembled image) — see temporal decimation above
 
 ### 4. Communication
 - Dual UART outputs: N3 (ESP32) + J18 (USB bridge for PC debug)
@@ -190,7 +193,9 @@ All timing met (WNS = 1.101 ns on 100 MHz CNN clock).
 │   ├── uart_tx.v              UART 8N1 transmitter
 │   ├── fft_frontend.v         FFT pipeline orchestration
 │   ├── fft_window_buffer.v    Hann window + hop scheduler
-│   ├── fft_magnitude.v        Complex→magnitude + bin downsampling
+│   ├── fft_magnitude.v        Complex→magnitude (256 linear bins)
+│   ├── mel_filterbank.v       256 linear bins → 64 mel bands
+│   ├── mel_coeffs.mem         Mel filter weights (generated)
 │   ├── fft_feature_quantizer.v  16→8-bit log₂ companding
 │   ├── spectrogram_buffer_64x64.v  64×64 BRAM staging
 │   ├── spectrogram_pingpong.v  Double-buffered CNN input (BRAM)
@@ -299,21 +304,24 @@ Open `http://localhost:3000` to view live telemetry.
 ### Completed
 - Audio capture via I2S (46.875 kHz, 24-bit)
 - FFT pipeline (512-point, Hann window, hop=64, DSP-pipelined)
-- 64-bin spectrogram output (0–23.4 kHz, 8-bit log₂ features)
+- Mel filterbank (256 linear bins → 64 mel bands, 0–8 kHz, Slaney scale) matching the CNN's training-time feature extraction
+- Temporal column decimation (23:1) so each CNN input image spans ~2 s of audio, matching training's column spacing
 - 64×64 spectrogram staging buffer (BRAM)
 - CNN autoencoder inference on-FPGA (100 MHz, MAE scoring)
 - Dual UART output (ESP32 + USB debug) at 1 Mbaud
 - ESP32 LVGL display with spectrogram and status UI
 - ESP32 Wi-Fi telemetry upload to Supabase (non-blocking background task)
 - Next.js web dashboard for realtime telemetry and anomaly monitoring
-- Python real-time viewer with blit rendering, diagnostics, and comparison tools
+- Python real-time viewer with blit rendering, diagnostics, and comparison tools (mel filterbank applied to both live and simulated paths)
 - Backpressure regression testbench
+- Mel filterbank + magnitude-path regression testbenches (bit-exact against a behavioral reference model)
 
 ### Acknowledged Limitations
 - Requires training data for acoustic signatures
 - Sensitive to environmental noise
 - Model generalization across printer types not yet validated
 - Power signoff workflow not yet run
+- The on-chip mel filterbank warps the FPGA's own 256 linear FFT bins (512-pt FFT @ 46.875 kHz); it is not a bit-exact reproduction of the training pipeline's mel spectrogram (1024-pt FFT @ 16 kHz). Frequency-axis *shape* and temporal *span* now match training, but bin resolution and exact log-compression curve still differ. Retraining on hardware-captured (mel-filtered, temporally-decimated) spectrograms is the only way to close that remaining gap fully.
 
 ### Contributors
 - Gavin Tan from Singapore University of Technology and Design, Electrical Engineering (Product Development)

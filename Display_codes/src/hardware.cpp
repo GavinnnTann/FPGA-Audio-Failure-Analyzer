@@ -93,13 +93,12 @@ void read_ft6206_once() {
 }
 
 void touch_task(void* /*arg*/) {
-  // Self-register with the Task Watchdog. If I2C ever wedges (FT6206
-  // refusing to ACK, bus stuck low), the failed reset call will trip the
-  // WDT and the system reboots into a clean state.
-  esp_task_wdt_add(NULL);
+  // NOTE: Not registered with the Task Watchdog — same reason as uart_rx_task.
+  // The WiFi/TLS stack runs at priority 23 on Core 0 and can starve this
+  // task (priority 3) during TLS handshakes, which would cause spurious WDT
+  // fires. Only the Core 1 loopTask is WDT-monitored.
 
   for (;;) {
-    esp_task_wdt_reset();
 
     if (TouchIntPin >= 0 && g_touch_int_sem != nullptr) {
       // Wait for INT pulse from FT6206. Wake at least every 30 ms so we
@@ -200,6 +199,11 @@ void touchscreen_read(lv_indev_t* indev, lv_indev_data_t* data) {
 void flush_cb(lv_display_t* display, const lv_area_t* area, uint8_t* px_map) {
   const uint16_t width = static_cast<uint16_t>(area->x2 - area->x1 + 1);
   const uint16_t height = static_cast<uint16_t>(area->y2 - area->y1 + 1);
+
+  // Reset the WDT on every flush so a long multi-pass render (Screen2 has
+  // many dirty widgets) doesn't trigger the 8-second timeout between the
+  // top-of-loop reset and the end of lv_timer_handler().
+  esp_task_wdt_reset();
 
   tft.startWrite();
   tft.setAddrWindow(area->x1, area->y1, width, height);

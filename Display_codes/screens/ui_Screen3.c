@@ -474,8 +474,8 @@ void ui_Screen3_screen_init(void)
         "• FFT magnitude over time\n"
         "• Scroll left = newer data\n"
         "• Brighter = higher amplitude\n"
-        "• Y: frequency (low→high)\n"
-        "• X: time (past→now)");
+        "• Y: frequency (low > high)\n"
+        "• X: time (past > now)");
     lv_obj_set_align(ui_LabelDesc, LV_ALIGN_CENTER);
     lv_obj_set_x(ui_LabelDesc, -115);
     lv_obj_set_y(ui_LabelDesc, 70);

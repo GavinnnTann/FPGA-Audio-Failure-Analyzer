@@ -6,11 +6,12 @@ import Link from 'next/link';
 import { useTheme } from '../ThemeProvider';
 
 // ── Supabase ──────────────────────────────────────────────────────────────────
-const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
 const supabase = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
 const CHANNEL_NAME   = 'spectrogram-live';
 const BROADCAST_HZ   = 15;   // max sweeps pushed to Supabase per second
+const DB_INSERT_HZ   = 1;    // max telemetry rows inserted to Supabase DB per second
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BAUD_RATE      = 1_000_000;
@@ -169,6 +170,7 @@ export default function SpectrogramPage() {
   const readerRef    = useRef(null);
   const channelRef   = useRef(null);
   const lastBroadcast = useRef(0);
+  const lastDbInsert  = useRef(0);
 
   const canvasRefs = { wfBufRef, headRef, peakRef, wfCanvasRef, barCanvasRef };
 
@@ -228,6 +230,23 @@ export default function SpectrogramPage() {
               type: 'broadcast',
               event: 'sweep',
               payload: sweep,
+            });
+          }
+
+          // Rate-limited insert into spectrogram table for persistence
+          const dbInterval = 1000 / DB_INSERT_HZ;
+          if (supabase && now - lastDbInsert.current >= dbInterval) {
+            lastDbInsert.current = now;
+            supabase.from('spectrogram').insert({
+              spectrum:    sweep.spectrum,
+              rms:         sweep.rms,
+              result:      sweep.result,
+              flags:       sweep.flags,
+              seq:         sweep.seq,
+              metric:      sweep.metric,
+              anomaly:     Boolean(sweep.flags & 0x02),
+              fpga_active: Boolean(sweep.flags & 0x01),
+              cnn_ran:     Boolean(sweep.flags & 0x04),
             });
           }
         },
