@@ -74,6 +74,8 @@ __pycache__/
 *.backup
 *.tmp
 
+model_hls_output/
+
 # User-specific files (optional)
 # Uncomment if you don't want to share specific configurations
 # scripts/config.tcl
