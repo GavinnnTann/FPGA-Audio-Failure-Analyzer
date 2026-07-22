@@ -62,6 +62,15 @@ portMUX_TYPE g_active_mux = portMUX_INITIALIZER_UNLOCKED;
 // held during TLS handshakes, preventing the WDT from being reset for 8+ s.
 static std::atomic<bool> g_wifi_connected_cache{false};
 
+// Master radio switch, written from any task by set_enabled() and consumed
+// only by uploader_task. Defaults to false so the device boots with the radio
+// down — nothing brings WiFi up until the user flips the Settings toggle.
+static std::atomic<bool> g_radio_enabled{false};
+
+// uploader_task's view of what the radio is actually doing. Compared against
+// g_radio_enabled each iteration to detect an off→on / on→off edge.
+bool g_radio_active = false;
+
 // ---- NVS helpers ------------------------------------------------------------
 
 constexpr const char* kPrefsNamespace = "wifi";
@@ -189,12 +198,35 @@ void apply_initial_credentials() {
   start_wifi(ssid, pass);
 }
 
+// Bring the radio up or down to match g_radio_enabled. Runs on the uploader
+// task only, so every WiFi.* call below stays on Core 0.
+void service_radio_state() {
+  const bool want = g_radio_enabled.load(std::memory_order_relaxed);
+  if (want == g_radio_active) return;
+
+  if (want) {
+    // Re-reads NVS, so credentials set while the radio was off take effect here.
+    apply_initial_credentials();
+  } else {
+    disconnect_wifi();
+    WiFi.mode(WIFI_OFF);
+    g_wifi_started = false;
+    g_wifi_connected_cache.store(false, std::memory_order_relaxed);
+  }
+  g_radio_active = want;
+}
+
 void process_pending_command() {
   PendingCommand cmd;
   portENTER_CRITICAL(&g_pending_mux);
   cmd = g_pending;
   g_pending.cmd = WifiCmd::None;
   portEXIT_CRITICAL(&g_pending_mux);
+
+  // With the radio off we still consume the command so it cannot fire stale
+  // later, but skip the radio work. The caller has already persisted the new
+  // credentials to NVS, and service_radio_state() re-reads them on enable.
+  if (!g_radio_active) return;
 
   switch (cmd.cmd) {
     case WifiCmd::Apply:
@@ -261,7 +293,9 @@ void build_json(char* buf, size_t len, const Snapshot& s) {
 
 void uploader_task(void* /*arg*/) {
   vTaskDelay(pdMS_TO_TICKS(kBootDelayMs));
-  apply_initial_credentials();
+
+  // No unconditional connect at boot — the radio comes up only once
+  // service_radio_state() sees the enable flag set.
 
   // Persistent so the TLS session survives between uploads — avoids repeated BIGNUM handshakes.
   WiFiClientSecure tls;
@@ -269,7 +303,18 @@ void uploader_task(void* /*arg*/) {
   tls.setTimeout(kHttpTimeoutMs / 1000U);
 
   while (true) {
+    service_radio_state();
     process_pending_command();
+
+    // Radio down: drop any TLS session and idle. Nothing should be queued
+    // (main.cpp gates push on the same setting) but drain defensively so a
+    // stale snapshot cannot be POSTed the moment WiFi comes back.
+    if (!g_radio_active) {
+      tls.stop();
+      xQueueReset(snap_queue);
+      vTaskDelay(pdMS_TO_TICKS(kCommandPollMs));
+      continue;
+    }
 
     // Refresh the cache from Core 0 so Core 1 never needs to call WiFi.status().
     g_wifi_connected_cache.store(
@@ -352,7 +397,12 @@ void init() {
 
 void push(const Snapshot& snap) {
   if (snap_queue == nullptr) return;
+  if (!g_radio_enabled.load(std::memory_order_relaxed)) return;
   xQueueSend(snap_queue, &snap, 0);
+}
+
+void set_enabled(bool on) {
+  g_radio_enabled.store(on, std::memory_order_relaxed);
 }
 
 bool is_connected() {

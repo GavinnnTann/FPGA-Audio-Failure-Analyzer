@@ -6,7 +6,10 @@
 namespace {
 
 bool s_vibration_enabled = true;
-bool s_wifi_upload_enabled = true;
+// WiFi is off at boot: the radio stays powered down and no telemetry is
+// uploaded until the user turns on "WiFi Upload" in Settings. Screen2 reads
+// this to set the switch's initial position, so the two always agree.
+bool s_wifi_upload_enabled = false;
 uint8_t s_brightness = hardware::BacklightDefault;
 
 }  // namespace
@@ -27,6 +30,9 @@ bool settings_wifi_upload_enabled(void) {
 
 void settings_set_wifi_upload_enabled(bool on) {
   s_wifi_upload_enabled = on;
+  // Drive the radio itself, not just the upload gate — otherwise the switch
+  // would leave WiFi associated while merely suppressing the POSTs.
+  wifi_uploader::set_enabled(on);
 }
 
 uint8_t settings_brightness(void) {

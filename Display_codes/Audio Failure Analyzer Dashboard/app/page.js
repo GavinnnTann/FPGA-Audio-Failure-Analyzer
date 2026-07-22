@@ -5,16 +5,30 @@ import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useTheme } from './ThemeProvider';
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
+// ── Supabase (optional cloud path) ────────────────────────────────────────────
+// The Supabase project is currently switched off, so the cloud path is opt-in.
+// Everything below is left intact — to bring it back, set
+//   NEXT_PUBLIC_SUPABASE_ENABLED=true
+// alongside the URL/anon-key vars (Vercel → Project Settings → Environment
+// Variables) and redeploy. While it is off the dashboard runs entirely off the
+// local USB / Web Serial feed and never blocks on a network round-trip.
+const SUPA_ENABLED = process.env.NEXT_PUBLIC_SUPABASE_ENABLED === 'true';
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-const supabase = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
+const supabase = SUPA_ENABLED && SUPA_URL && SUPA_KEY
+  ? createClient(SUPA_URL, SUPA_KEY)
+  : null;
+const CLOUD_ON = !!supabase;
 const CHANNEL_NAME = 'spectrogram-live';
 const BROADCAST_HZ = 15;
 const DB_INSERT_HZ  = 1;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const BAUD_RATE      = 115200;
+// Must match the ESP32 USB serial rate — Serial.begin(1000000) in src/main.cpp,
+// which in turn matches kFpgaUartBaud so the FPGA stream is forwarded verbatim.
+// A mismatch here reads pure garbage: no checksum validates and the parser
+// silently resyncs forever, so the UI just sits at "NO DATA".
+const BAUD_RATE      = 1_000_000;
 const NUM_BINS       = 64;
 const WATERFALL_ROWS = 128;
 const SAMPLE_RATE    = 46875.0;
@@ -246,8 +260,10 @@ export default function MainPage() {
 
   // ── Dashboard state ─────────────────────────────────────────────────────────
   const [rows,    setRows]    = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
+  // Only the cloud path has anything to load; with it off we start ready.
+  const [loading, setLoading] = useState(CLOUD_ON);
+  // Cloud problems are advisory only — they never take the dashboard down.
+  const [cloudErr, setCloudErr] = useState(null);
   const [isLive,  setIsLive]  = useState(false);
   const [newId,   setNewId]   = useState(null);
   const lastDataAt   = useRef(null);
@@ -285,24 +301,28 @@ export default function MainPage() {
 
   // ── Supabase subscriptions ───────────────────────────────────────────────────
   useEffect(() => {
-    if (!supabase) {
-      setError('Environment variables not set.\nAdd NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-      setLoading(false);
-      return;
-    }
     if (typeof navigator !== 'undefined' && !('serial' in navigator)) {
       setSerialStatus('unsupported');
     }
 
-    // Initial telemetry load
+    // Cloud path off — the dashboard runs on USB alone. Nothing to subscribe to.
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    // Initial telemetry load — a failure here just means no history to backfill.
     supabase
       .from('telemetry')
       .select('*')
       .order('inserted_at', { ascending: false })
       .limit(200)
       .then(({ data, error: err }) => {
-        if (err) setError(err.message);
+        if (err) setCloudErr(`History unavailable — ${err.message}`);
         else setRows(data ?? []);
+        setLoading(false);
+      }, (err) => {
+        setCloudErr(`History unavailable — ${err?.message ?? 'cloud unreachable'}`);
         setLoading(false);
       });
 
@@ -510,17 +530,12 @@ export default function MainPage() {
   const maxRms   = telStats?.maxRms  ?? 1;
   const rmsRatio = Math.min(((l?.rms ?? 0) / maxRms) * 100, 100);
 
-  // ── Loading / error ───────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────────
+  // Only reachable with the cloud path on; USB-only mode renders immediately.
   if (loading) return (
     <div className="state-center">
       <div className="state-title" style={{ color: 'var(--amber-lo)' }}>INITIALIZING</div>
       <div className="state-sub">Connecting to Supabase telemetry stream...</div>
-    </div>
-  );
-  if (error) return (
-    <div className="state-center">
-      <div className="state-title" style={{ color: 'var(--red-hi)', animationDuration: '0.4s' }}>CONFIG ERROR</div>
-      <div className="state-sub" style={{ whiteSpace: 'pre-line' }}>{error}</div>
     </div>
   );
 
@@ -579,6 +594,14 @@ export default function MainPage() {
           </button>
         </div>
       </header>
+
+      {/* ── Cloud notice (advisory — never blocks the dashboard) ─────────────── */}
+      {cloudErr && (
+        <div className="spec-banner" style={{ borderColor: 'var(--amber)' }}>
+          <span style={{ color: 'var(--amber-lo)' }}>Cloud offline: </span>{cloudErr}
+          {' '}Live USB capture is unaffected.
+        </div>
+      )}
 
       {/* ── Mobile tab nav ──────────────────────────────────────────────────── */}
       <div className="tab-nav">
@@ -687,7 +710,9 @@ export default function MainPage() {
                   {rows.length === 0 && (
                     <tr>
                       <td colSpan={10} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-lo)' }}>
-                        NO DATA — Waiting for ESP32 (WiFi) or connect FPGA via USB on the Spectrogram tab...
+                        {CLOUD_ON
+                          ? 'NO DATA — Waiting for ESP32 (WiFi) or connect FPGA via USB on the Spectrogram tab...'
+                          : 'NO DATA — Click "Connect USB" above to stream live from the FPGA.'}
                       </td>
                     </tr>
                   )}

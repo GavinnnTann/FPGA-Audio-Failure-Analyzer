@@ -5,10 +5,15 @@ import { createClient } from '@supabase/supabase-js';
 import Link from 'next/link';
 import { useTheme } from '../ThemeProvider';
 
-// ── Supabase ──────────────────────────────────────────────────────────────────
+// ── Supabase (optional cloud path) ────────────────────────────────────────────
+// Opt-in while the Supabase project is switched off — see app/page.js for the
+// re-enable steps. Host mode over USB works with or without it.
+const SUPA_ENABLED = process.env.NEXT_PUBLIC_SUPABASE_ENABLED === 'true';
 const SUPA_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const SUPA_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-const supabase = SUPA_URL && SUPA_KEY ? createClient(SUPA_URL, SUPA_KEY) : null;
+const supabase = SUPA_ENABLED && SUPA_URL && SUPA_KEY
+  ? createClient(SUPA_URL, SUPA_KEY)
+  : null;
 const CHANNEL_NAME   = 'spectrogram-live';
 const BROADCAST_HZ   = 15;   // max sweeps pushed to Supabase per second
 const DB_INSERT_HZ   = 1;    // max telemetry rows inserted to Supabase DB per second
@@ -374,9 +379,9 @@ export default function SpectrogramPage() {
       )}
       {!supabaseOk && (
         <div className="spec-banner">
-          Supabase not configured — other devices cannot view the stream.
-          Add <code className="spec-code">NEXT_PUBLIC_SUPABASE_URL</code> and{' '}
-          <code className="spec-code">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to enable multi-device sharing.
+          Local-only mode — the cloud relay is off, so other devices cannot view this stream.
+          Set <code className="spec-code">NEXT_PUBLIC_SUPABASE_ENABLED=true</code> (with the URL and
+          anon-key vars) to re-enable multi-device sharing.
         </div>
       )}
 

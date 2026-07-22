@@ -32,8 +32,19 @@ struct Snapshot {
 };
 
 // Initialise the uploader and spawn the background task.
-// Call once from setup(), after hardware init.
+// Call once from setup(), after hardware init. The radio stays powered
+// down until set_enabled(true) — see below.
 void init();
+
+// Master radio switch. The device boots with WiFi OFF; the "WiFi Upload"
+// toggle on the Settings screen drives this through settings.cpp.
+//
+// Only records intent — the actual WiFi.begin()/disconnect() happens on the
+// uploader task (Core 0), preserving the invariant that the radio state
+// machine is touched from exactly one context. Safe to call from any thread.
+// Enabling re-reads the stored (or compiled-in) credentials, so credentials
+// configured while disabled are picked up on the next enable.
+void set_enabled(bool on);
 
 // Push a snapshot to the upload queue.
 // Non-blocking and ISR/task-safe — silently drops if queue is full.
